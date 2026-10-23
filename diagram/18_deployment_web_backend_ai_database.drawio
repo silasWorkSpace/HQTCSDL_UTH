@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="Claude" compressed="false" pages="1">
+  <diagram id="ld18" name="18 - Deployment web backend AI database">
+    <mxGraphModel dx="1072" dy="607" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#17365D;" value="Sơ đồ 18. Deployment Diagram – triển khai web/backend/AI/database" vertex="1">
+          <mxGeometry height="40" width="1500" x="40" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="clientzone" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«device» Người dùng" vertex="1">
+          <mxGeometry height="220" width="220" x="20" y="122.5" as="geometry" />
+        </mxCell>
+        <mxCell id="browser" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;strokeWidth=2;" value="«execution environment»&lt;br&gt;Trình duyệt web&lt;br&gt;Desktop / Tablet" vertex="1">
+          <mxGeometry height="95" width="180" x="40" y="195" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«execution environment» Môi trường triển khai LivingDocs&lt;br&gt;(Docker containers)" vertex="1">
+          <mxGeometry height="835" width="950" x="290" y="85" as="geometry" />
+        </mxCell>
+        <mxCell id="webnode" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«container» Web tier" vertex="1">
+          <mxGeometry height="155" width="250" x="330" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="react" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;fontSize=13;strokeWidth=2;" value="«artifact» ReactJS Web App" vertex="1">
+          <mxGeometry height="65" width="180" x="365" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="backendnode" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«container» Backend tier – Java Spring Boot" vertex="1">
+          <mxGeometry height="360" width="530" x="670" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;strokeWidth=2;" value="API Gateway&lt;br&gt;Token validation, routing,&lt;br&gt;rate limiting" vertex="1">
+          <mxGeometry height="75" width="160" x="708" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="identity" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;strokeWidth=2;" value="Identity &amp;amp; RBAC&lt;br&gt;OAuth2 / OIDC / JWT" vertex="1">
+          <mxGeometry height="75" width="160" x="1030" y="205" as="geometry" />
+        </mxCell>
+        <mxCell id="services" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;strokeWidth=2;" value="Workspace &amp;amp; GitHub Integration&lt;br&gt;Document / Version / Change Log&lt;br&gt;Workflow • Governance &amp;amp; Template&lt;br&gt;Notification&lt;br&gt;&lt;i&gt;(mỗi service một container – NFR-MAIN-01)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="125" width="345" x="708" y="322.5" as="geometry" />
+        </mxCell>
+        <mxCell id="ainode" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«container» AI tier – Python FastAPI" vertex="1">
+          <mxGeometry height="245" width="260" x="310" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="aiengine" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6B656;fontSize=13;strokeWidth=2;" value="AI Engine&lt;br&gt;AST Analyzer&lt;br&gt;RAG Retriever&lt;br&gt;LLM Orchestrator&lt;br&gt;Confidence &amp;amp; evidence" vertex="1">
+          <mxGeometry height="135" width="190" x="335" y="433" as="geometry" />
+        </mxCell>
+        <mxCell id="messaging" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«container» Async messaging" vertex="1">
+          <mxGeometry height="135" width="240" x="645" y="568" as="geometry" />
+        </mxCell>
+        <mxCell id="kafka" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B85450;fontSize=13;strokeWidth=2;" value="Apache Kafka&lt;br&gt;Events / jobs / retry / DLQ" vertex="1">
+          <mxGeometry height="60" width="180" x="675" y="622.5" as="geometry" />
+        </mxCell>
+        <mxCell id="datanode" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«container» Data tier" vertex="1">
+          <mxGeometry height="335" width="250" x="950" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="sql" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=13;strokeWidth=2;" value="SQL Server&lt;br&gt;Business data&lt;br&gt;Schema per tenant" vertex="1">
+          <mxGeometry height="65" width="190" x="990" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="redis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=13;strokeWidth=2;" value="Redis cache" vertex="1">
+          <mxGeometry height="45" width="190" x="980" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="vector" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=13;strokeWidth=2;" value="Vector store (TBD)&lt;br&gt;SQL Server vector support&lt;br&gt;or Qdrant / Chroma" vertex="1">
+          <mxGeometry height="50" width="190" x="980" y="828" as="geometry" />
+        </mxCell>
+        <mxCell id="external" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" value="«external system» Hệ thống ngoài" vertex="1">
+          <mxGeometry height="490" width="280" x="1280" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="github18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=13;strokeWidth=2;" value="GitHub&lt;br&gt;GitHub App / OAuth&lt;br&gt;Webhooks / Actions&lt;br&gt;Source PR / Docs PR" vertex="1">
+          <mxGeometry height="110" width="200" x="1320" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="llm18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=13;strokeWidth=2;" value="LLM provider hoặc&lt;br&gt;LLM nội bộ&lt;br&gt;(cấu hình được)" vertex="1">
+          <mxGeometry height="80" width="200" x="1320" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="jira18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=13;strokeWidth=2;" value="Jira&lt;br&gt;(giai đoạn 2)" vertex="1">
+          <mxGeometry height="55" width="200" x="1320" y="415" as="geometry" />
+        </mxCell>
+        <mxCell id="docker18" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=15;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;strokeWidth=2;" value="Docker; cấu hình qua biến môi trường&lt;br&gt;OpenAPI / Swagger cho API REST/JSON&lt;br&gt;HTTPS/TLS cho giao tiếp mạng&lt;br&gt;Sao lưu định kỳ theo RPO/RTO (SRS)&lt;br&gt;GitHub Actions chạy trên phía GitHub" vertex="1">
+          <mxGeometry height="105" width="290" x="480" y="723" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" edge="1" parent="1" source="browser" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=12;labelBackgroundColor=#FFFFFF;" target="react" value="HTTPS">
+          <mxGeometry relative="1" x="-0.3939" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d2" edge="1" parent="1" source="react" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="gateway" value="REST/JSON">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" edge="1" parent="1" source="gateway" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="identity" value="JWT / OAuth2 / OIDC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" edge="1" parent="1" source="gateway" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="services" value="REST">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" edge="1" parent="1" source="services" style="startArrow=none;startFill=0;endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;entryX=1;entryY=0.25;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="kafka" value="events (publish / consume)">
+          <mxGeometry relative="1" x="-0.1725" y="-54" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="900" y="580" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d7" edge="1" parent="1" source="kafka" style="startArrow=block;startFill=1;endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="aiengine" value="jobs / results / retry">
+          <mxGeometry relative="1" x="0.2658" y="-3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d8" edge="1" parent="1" source="services" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="sql" value="SQL">
+          <mxGeometry relative="1" x="0.3786" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="970" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d9" edge="1" parent="1" source="services" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="redis" value="cache">
+          <mxGeometry relative="1" x="0.704" y="15" as="geometry">
+            <mxPoint y="1" as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d10" edge="1" parent="1" source="aiengine" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="vector" value="embeddings / retrieval">
+          <mxGeometry relative="1" x="0.0257" as="geometry">
+            <Array as="points">
+              <mxPoint x="430" y="853" />
+            </Array>
+            <mxPoint x="505" y="540" as="sourcePoint" />
+            <mxPoint x="980" y="758.3333333333335" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d11" edge="1" parent="1" source="services" style="startArrow=block;startFill=1;endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="github18" value="App API ↔ webhook (HMAC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d12" edge="1" parent="1" source="aiengine" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="llm18" value="LLM API">
+          <mxGeometry relative="1" x="0.3612" y="-3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d13" edge="1" parent="1" source="services" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="slack18" value="Thông báo (phase 2)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="note18" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=15;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;" value="Kiến trúc logic tham chiếu theo SRS; ranh giới dịch vụ và lựa chọn vector store được chốt ở Architecture Design. OCR/Multimodal thuộc giai đoạn 2." vertex="1">
+          <mxGeometry height="70" width="570" x="525" y="940" as="geometry" />
+        </mxCell>
+        <mxCell id="slack18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=13;strokeWidth=2;" value="Slack&lt;br&gt;(giai đoạn 2)" vertex="1">
+          <mxGeometry height="55" width="200" x="1320" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="d14" edge="1" parent="1" source="services" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="jira18" value="Ticket drift (FR-NTF-03, phase 2)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
