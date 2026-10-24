@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="Claude" compressed="false" pages="1">
+  <diagram id="ld07" name="07 - Governance, template, policy và hệ thống">
+    <mxGraphModel dx="2339" dy="2324" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0">
+          <mxCell id="a7_9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1.4;" edge="1" parent="1">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint x="1455" y="325" as="sourcePoint" />
+              <mxPoint x="760" y="665" as="targetPoint" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#17365D;" value="Sơ đồ 7. Quản trị tài liệu, template, policy và hệ thống" vertex="1">
+          <mxGeometry height="40" width="1500" x="40" y="-50" as="geometry" />
+        </mxCell>
+        <mxCell id="boundary7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#6C8EBF;dashed=1;dashPattern=8 4;fontStyle=1;fontSize=16;verticalAlign=top;spacingTop=10;strokeWidth=4;" value="LivingDocs" vertex="1">
+          <mxGeometry height="920" width="1110" x="230" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="tl7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Technical Lead" vertex="1">
+          <mxGeometry height="110" width="110" x="35" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="mgr7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Manager" vertex="1">
+          <mxGeometry height="110" width="110" x="20" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="dev7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Developer" vertex="1">
+          <mxGeometry height="100" width="110" x="35" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="admin7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Administrator" vertex="1">
+          <mxGeometry height="130" width="110" x="1400" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="slack7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Slack&lt;br&gt;(giai đoạn 2)" vertex="1">
+          <mxGeometry height="130" width="82.5" x="1427.5" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="uc15" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-15 · Quản lý template&lt;br&gt;(tạo/sửa/nhân bản/xóa,&lt;br&gt;phiên bản, preview)" vertex="1">
+          <mxGeometry height="90" width="250" x="590" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc16" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-16 · Quản trị tài liệu&lt;br&gt;và dashboard sức khỏe" vertex="1">
+          <mxGeometry height="75" width="230" x="500" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="govdep" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Xem phụ thuộc tài liệu ↔ code,&lt;br&gt;chất lượng và drift chưa xử lý" vertex="1">
+          <mxGeometry height="75" width="270" x="300" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="uc17" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-17 · Cấu hình policy&lt;br&gt;auto-update và auto-apply" vertex="1">
+          <mxGeometry height="80" width="270" x="625" y="442" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-18 · Cấu hình merge policy&lt;br&gt;và ủy quyền duyệt" vertex="1">
+          <mxGeometry height="80" width="230" x="420" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="uc19" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-19 · Quản lý user,&lt;br&gt;role và workspace" vertex="1">
+          <mxGeometry height="75" width="210" x="910" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="uc20" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-20 · Cấu hình tích hợp&lt;br&gt;GitHub, Jira, Slack" vertex="1">
+          <mxGeometry height="75" width="230" x="1020" y="612.5" as="geometry" />
+        </mxCell>
+        <mxCell id="uc21" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-21 · Cấu hình AI,&lt;br&gt;lưu giữ và giám sát hệ thống" vertex="1">
+          <mxGeometry height="100" width="210" x="1090" y="217.5" as="geometry" />
+        </mxCell>
+        <mxCell id="uc22" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="UC-22 · Nhận thông báo&lt;br&gt;(Developer, Staff, Manager, Technical Lead, Administrator)" vertex="1">
+          <mxGeometry height="65" width="300" x="610" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="history" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Theo dõi lịch sử phiên bản,&lt;br&gt;change log và rollback" vertex="1">
+          <mxGeometry height="65" width="230" x="590" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="e71" edge="1" parent="1" source="tl7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc15" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e72" edge="1" parent="1" source="tl7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc16" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e73" edge="1" parent="1" source="tl7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="govdep" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e74" edge="1" parent="1" source="tl7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc17" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e77" edge="1" parent="1" source="mgr7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="approve7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e78" edge="1" parent="1" source="mgr7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc18" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e79" edge="1" parent="1" source="admin7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc17" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e710" edge="1" parent="1" source="admin7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc19" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e711" edge="1" parent="1" source="admin7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc20" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e712" edge="1" parent="1" source="admin7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc21" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e713" edge="1" parent="1" source="tl7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="history" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e714" edge="1" parent="1" source="mgr7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="history" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e715" edge="1" parent="1" source="dev7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="history" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e716" edge="1" parent="1" source="slack7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc22" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e718" edge="1" parent="1" source="mgr7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc22" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e719" edge="1" parent="1" source="dev7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc22" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e720" edge="1" parent="1" source="uc17" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="docpolicy" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="note7" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=15;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;strokeWidth=2;" value="Ưu tiên policy theo SRS: guardrails Administrator → loại tài liệu Manager bắt buộc review → policy loại tài liệu đã được Manager phê duyệt → policy Technical Lead → tùy chọn Developer. Khi xung đột, áp dụng cấu hình hạn chế hơn. Jira/Slack là tích hợp giai đoạn 2." vertex="1">
+          <mxGeometry height="140" width="300" x="920" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="docpolicy" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Cấu hình policy theo loại tài liệu&lt;br&gt;(Administrator · FR-AUTO-13)" vertex="1">
+          <mxGeometry height="80" width="300" x="610" y="625" as="geometry" />
+        </mxCell>
+        <mxCell id="guard7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Giới hạn bảo vệ (guardrails)&lt;br&gt;(FR-ADM-15)" vertex="1">
+          <mxGeometry height="62" width="210" x="1000" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="toggle7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Bật/tắt auto-update&lt;br&gt;(FR-AUTO-03)" vertex="1">
+          <mxGeometry height="62" width="170" x="280" y="449" as="geometry" />
+        </mxCell>
+        <mxCell id="approve7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;align=center;verticalAlign=middle;strokeWidth=2;" value="Phê duyệt / thu hồi&lt;br&gt;auto-apply theo loại tài liệu&lt;br&gt;(FR-AUTO-17)" vertex="1">
+          <mxGeometry height="62" width="160" x="280" y="655" as="geometry" />
+        </mxCell>
+        <mxCell id="github7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="GitHub" vertex="1">
+          <mxGeometry height="100" width="110" x="1400" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="jira7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;strokeColor=#34495E;fillColor=#FFFFFF;strokeWidth=2;" value="Jira&lt;br&gt;(giai đoạn 2)" vertex="1">
+          <mxGeometry height="100" width="110" x="1400" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_1" edge="1" parent="1" source="uc17" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="guard7" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_2" edge="1" parent="1" source="toggle7" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="uc17" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_3" edge="1" parent="1" source="approve7" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;labelBackgroundColor=#FFFFFF;" target="uc17" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_4" edge="1" parent="1" source="admin7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="guard7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_5" edge="1" parent="1" source="dev7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="toggle7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_6" edge="1" parent="1" source="mgr7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="approve7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_7" edge="1" parent="1" source="github7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc20" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_8" edge="1" parent="1" source="jira7" style="endArrow=none;html=1;rounded=0;strokeColor=#52677D;strokeWidth=2;fontSize=13;" target="uc20" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
