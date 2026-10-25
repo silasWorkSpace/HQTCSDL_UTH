@@ -18,29 +18,33 @@ HQTCSDL_UTH/
 
 Trước khi chạy dự án, cần cài đặt:
 
-- Git
-- Node.js và npm (để chạy frontend)
+- Git  https://git-scm.com/install/windows
+- Node.js và npm (để chạy frontend)  https://nodejs.org/en/download
 - Môi trường chạy backend phù hợp với công nghệ được sử dụng
 
 ## 4. Clone repository
 
 Mở Terminal hoặc PowerShell và chạy:
 
-git clone https://github.com/silasWorkSpace/HQTCSDL_UTH.git
-cd HQTCSDL_UTH
+`git clone https://github.com/silasWorkSpace/HQTCSDL_UTH.git`
+
+`cd HQTCSDL_UTH`
 
 Nếu đã clone repository trước đó, cập nhật mã nguồn mới nhất:
 
-git switch main
-git pull origin main
+`git switch main`
+
+`git pull origin main`
 
 ## 5. Chạy Frontend
 
 Di chuyển vào thư mục frontend:
 
-cd frontend
-npm install
-npm run dev
+** `cd frontend`
+
+** `npm install`
+
+** `npm run dev`
 
 Sau khi chạy thành công, mở địa chỉ local được hiển thị trong Terminal (thường là `http://localhost:5173`).
 
@@ -56,15 +60,15 @@ Thành viên vui lòng kiểm tra README hoặc hướng dẫn bên trong thư m
 
 Tạo nhánh mới từ `main` đã cập nhật:
 
-git switch main
-git pull origin main
-git switch -c feature/ten-tinh-nang
+`git switch main`
+`git pull origin main`
+`git switch -c feature/ten-tinh-nang`
 
 Sau khi hoàn thành công việc:
 
-git add .
-git commit -m "feat: mô tả chức năng"
-git push -u origin feature/ten-tinh-nang
+`git add .`
+`git commit -m "feat: mô tả chức năng"`
+`git push -u origin feature/ten-tinh-nang`
 
 Sau đó tạo **Pull Request (PR)** trên GitHub để xem xét và merge vào `main`.
 
