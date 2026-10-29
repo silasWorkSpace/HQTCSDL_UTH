@@ -1,0 +1,79 @@
+erDiagram
+    template ||--o{ template_version : "có nhiều phiên bản"
+    template |o--o| template_version : "current_version_id"
+    template |o--o{ collection : "default_template_id"
+    template |o--o{ document : "template_id"
+    collection |o--o{ document : "collection_id"
+    document ||--o{ document_version : "change log"
+    document |o--o| document_version : "current_version_id / published_version_id"
+    document ||--o{ doc_code_link : "liên kết"
+    code_entity ||--o{ doc_code_link : "CODE_ENTITY (cascade)"
+    repository ||--o{ document : "repository_id"
+    app_user ||--o{ document : "owner_id"
+    app_user |o--o{ collection : "owner_id"
+    app_user |o--o{ document_version : "actor_user_id"
+
+    template {
+        guid id PK
+        nvarchar name UK
+        varchar doc_type
+        guid current_version_id FK
+        varchar status
+    }
+    template_version {
+        guid id PK
+        guid template_id FK
+        int version_no
+        nvarchar sections "JSON"
+        nvarchar format_rules "JSON"
+    }
+    collection {
+        guid id PK
+        nvarchar name UK
+        guid owner_id FK
+        guid default_template_id FK
+    }
+    document {
+        guid id PK
+        guid repository_id FK
+        varchar doc_type
+        guid template_id FK
+        guid collection_id FK
+        guid owner_id FK
+        nvarchar title
+        nvarchar path_in_repo "UK với repository_id"
+        guid current_version_id FK
+        guid published_version_id FK
+        nvarchar docs_branch
+        int docs_pr_number
+        bit auto_update_enabled
+        varchar doc_status
+        varchar publish_status
+        varchar pr_status
+    }
+    document_version {
+        guid id PK
+        guid document_id FK
+        int version_no "UK với document_id"
+        nvarchar content "NULL khi đã che"
+        varbinary content_digest
+        bit content_redacted
+        varchar actor_role
+        guid actor_user_id FK
+        varchar change_source
+        varchar status_at_version
+        varchar source_commit_sha
+        int source_pr_number
+        varchar source_pr_kind
+        nvarchar reason
+        int rolled_back_from_version_no
+        varbinary prev_hash
+        varbinary hash
+    }
+    doc_code_link {
+        guid id PK
+        guid document_id FK
+        varchar link_type
+        guid code_entity_id FK
+        nvarchar external_ref
+    }
