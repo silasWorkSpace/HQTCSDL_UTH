@@ -1,0 +1,74 @@
+// Dan vao https://dbdiagram.io de ve ERD cum Nguoi 1.
+Table platform.workspace {
+  id uuid [pk]
+  code varchar(30) [unique, not null]
+  name nvarchar(200) [not null]
+  schema_name sysname [unique, not null]
+  config json
+  status varchar(20) [not null, note: 'active | suspended | archived']
+  created_at datetime2
+  updated_at datetime2
+}
+
+Table app_user {
+  id uuid [pk]
+  email nvarchar(256) [unique, not null]
+  display_name nvarchar(200) [not null]
+  password_hash varchar(255)
+  oidc_provider varchar(50)
+  oidc_subject nvarchar(200)
+  github_user_id bigint
+  status varchar(20) [not null, note: 'active | locked | disabled']
+  language varchar(10) [not null]
+  notification_prefs json
+  last_login_at datetime2
+  created_at datetime2
+  updated_at datetime2
+}
+
+Table role_assignment {
+  id uuid [pk]
+  user_id uuid [not null, ref: > app_user.id]
+  role varchar(20) [not null, note: 'Developer | Staff | Manager | TechLead | Administrator']
+  scope_type varchar(20) [not null, note: 'workspace | repository | module | document']
+  scope_id uuid
+  granted_by uuid [ref: > app_user.id]
+  created_at datetime2
+  indexes {
+    (user_id, role, scope_type, scope_id) [unique]
+  }
+}
+
+Table notification {
+  id uuid [pk]
+  recipient_user_id uuid [not null, ref: > app_user.id]
+  channel varchar(20) [not null, note: 'in_app | slack']
+  event_type varchar(50) [not null]
+  payload json [not null]
+  status varchar(20) [not null, note: 'pending | sent | failed']
+  read_at datetime2
+  sent_at datetime2
+  correlation_id uuid
+  created_at datetime2
+  indexes {
+    (recipient_user_id, read_at)
+  }
+}
+
+Table audit_log {
+  id uuid [pk]
+  action varchar(100) [not null]
+  actor_type varchar(10) [not null, note: 'ai | user | system']
+  actor_id uuid
+  actor_role varchar(20)
+  entity_type varchar(50) [not null]
+  entity_id uuid
+  correlation_id uuid
+  detail json
+  occurred_at datetime2 [not null]
+  retention_until datetime2 [not null]
+  indexes {
+    (entity_type, entity_id, occurred_at)
+    retention_until
+  }
+}
