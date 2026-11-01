@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 **/node_modules/
 
 # Build output
@@ -45,3 +45,7 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Database local test scripts
+backend/infra/mssql/02_integration/test_procedures.sql
+backend/infra/mssql/02_integration/benchmark_100k_code_entity.sql
