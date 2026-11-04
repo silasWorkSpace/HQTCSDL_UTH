@@ -3,6 +3,7 @@
 -- PHÂN HỆ: 02_integration (GitHub, Code, Job AI)
 -- TÁC GIẢ: Hiếu aka silas (Integration Subsystem Lead)
 
+SET NOCOUNT ON;
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
@@ -11,7 +12,7 @@ GO
 -- 1. PROCEDURE: sp_ingest_source_event
 -- Mô tả: Tiếp nhận sự kiện mã nguồn (PR, Commit, Merge) từ GitHub Webhook.
 -- Đảm bảo tính Idempotent qua delivery_id (NFR-REL-05).
-CREATE OR ALTER PROCEDURE dbo.sp_ingest_source_event
+CREATE OR ALTER PROCEDURE [$(SchemaName)].sp_ingest_source_event
     @repository_id          UNIQUEIDENTIFIER,
     @event_type             VARCHAR(50),
     @github_ref             NVARCHAR(255),
@@ -36,7 +37,7 @@ BEGIN
     SELECT 
         @event_id = id,
         @is_duplicate = 1
-    FROM dbo.source_event
+    FROM [$(SchemaName)].source_event
     WHERE delivery_id = @delivery_id;
 
     IF @is_duplicate = 1
@@ -46,7 +47,7 @@ BEGIN
             id, repository_id, event_type, github_ref, state, delivery_id, 
             diff_digest, created_by_livingdocs, correlation_id, received_at, payload,
             @is_duplicate AS is_duplicate
-        FROM dbo.source_event
+        FROM [$(SchemaName)].source_event
         WHERE id = @event_id;
         RETURN 0;
     END;
@@ -55,7 +56,7 @@ BEGIN
     BEGIN TRANSACTION;
     BEGIN TRY
         -- Đảm bảo repository tồn tại
-        IF NOT EXISTS (SELECT 1 FROM dbo.repository WHERE id = @repository_id)
+        IF NOT EXISTS (SELECT 1 FROM [$(SchemaName)].repository WHERE id = @repository_id)
         BEGIN
             DECLARE @repo_err_msg NVARCHAR(100) = CAST(@repository_id AS NVARCHAR(36));
             RAISERROR(N'Repository với ID %s không tồn tại trong hệ thống.', 16, 1, @repo_err_msg);
@@ -63,7 +64,7 @@ BEGIN
 
         DECLARE @new_id TABLE (id UNIQUEIDENTIFIER);
 
-        INSERT INTO dbo.source_event
+        INSERT INTO [$(SchemaName)].source_event
         (
             repository_id,
             event_type,
@@ -93,7 +94,7 @@ BEGIN
         SET @is_duplicate = 0;
 
         -- Cập nhật thời điểm đồng bộ gần nhất của Repository
-        UPDATE dbo.repository
+        UPDATE [$(SchemaName)].repository
         SET last_synced_at = SYSUTCDATETIME(),
             updated_at = SYSUTCDATETIME()
         WHERE id = @repository_id;
@@ -105,7 +106,7 @@ BEGIN
             id, repository_id, event_type, github_ref, state, delivery_id, 
             diff_digest, created_by_livingdocs, correlation_id, received_at, payload,
             @is_duplicate AS is_duplicate
-        FROM dbo.source_event
+        FROM [$(SchemaName)].source_event
         WHERE id = @event_id;
 
         RETURN 0;
@@ -120,7 +121,7 @@ GO
 
 -- 2. PROCEDURE: sp_fail_ai_job
 -- Mô tả: Xử lý khi AI Job gặp lỗi với Exponential Backoff (10s/30s/90s) & Dead Letter Queue (NFR-AVAIL-03)
-CREATE OR ALTER PROCEDURE dbo.sp_fail_ai_job
+CREATE OR ALTER PROCEDURE [$(SchemaName)].sp_fail_ai_job
     @job_id         UNIQUEIDENTIFIER,
     @error_message  NVARCHAR(MAX),
     @new_status     VARCHAR(50)         = NULL OUTPUT,
@@ -139,7 +140,7 @@ BEGIN
         -- Khóa dòng để cập nhật an toàn
         SELECT 
             @current_retry_count = retry_count
-        FROM dbo.ai_job WITH (UPDLOCK, ROWLOCK)
+        FROM [$(SchemaName)].ai_job WITH (UPDLOCK, ROWLOCK)
         WHERE id = @job_id;
 
         IF @current_retry_count IS NULL
@@ -179,7 +180,7 @@ BEGIN
         END;
 
         -- Cập nhật thông tin Job
-        UPDATE dbo.ai_job
+        UPDATE [$(SchemaName)].ai_job
         SET retry_count   = @new_retry_count,
             status        = @new_status,
             in_dlq        = @in_dlq,
@@ -193,7 +194,7 @@ BEGIN
         -- Trả về trạng thái sau cập nhật
         SELECT 
             id, job_type, status, retry_count, in_dlq, next_retry_at, error_message, updated_at
-        FROM dbo.ai_job
+        FROM [$(SchemaName)].ai_job
         WHERE id = @job_id;
 
         RETURN 0;
@@ -208,7 +209,7 @@ GO
 
 -- 3. PROCEDURE: sp_disconnect_repository
 -- Mô tả: Hủy kết nối kho mã nguồn, dọn dẹp code_entity, embedding và thu hồi token (FR-VER-10)
-CREATE OR ALTER PROCEDURE dbo.sp_disconnect_repository
+CREATE OR ALTER PROCEDURE [$(SchemaName)].sp_disconnect_repository
     @repository_id      UNIQUEIDENTIFIER,
     @actor_user_id      UNIQUEIDENTIFIER = NULL
 AS
@@ -224,7 +225,7 @@ BEGIN
         SELECT 
             @connection_id = connection_id,
             @repo_name = full_name
-        FROM dbo.repository WITH (UPDLOCK, ROWLOCK)
+        FROM [$(SchemaName)].repository WITH (UPDLOCK, ROWLOCK)
         WHERE id = @repository_id;
 
         IF @connection_id IS NULL
@@ -235,21 +236,21 @@ BEGIN
 
         -- 1. Xóa các embeddings thuộc các code_entity của repository này
         DELETE emb
-        FROM dbo.embedding emb
-        INNER JOIN dbo.code_entity ce ON emb.source_id = ce.id
+        FROM [$(SchemaName)].embedding emb
+        INNER JOIN [$(SchemaName)].code_entity ce ON emb.source_id = ce.id
         WHERE ce.repository_id = @repository_id 
           AND emb.source_type = 'code_chunk';
 
         -- 2. Dọn dẹp code_entity (Gỡ bỏ liên kết cây parent_id trước để tránh lỗi FK tự tham chiếu)
-        UPDATE dbo.code_entity
+        UPDATE [$(SchemaName)].code_entity
         SET parent_id = NULL
         WHERE repository_id = @repository_id;
 
-        DELETE FROM dbo.code_entity
+        DELETE FROM [$(SchemaName)].code_entity
         WHERE repository_id = @repository_id;
 
         -- 3. Cập nhật trạng thái Repository thành 'disconnected'
-        UPDATE dbo.repository
+        UPDATE [$(SchemaName)].repository
         SET connection_status = 'disconnected',
             updated_at = SYSUTCDATETIME(),
             updated_by = @actor_user_id
@@ -257,13 +258,13 @@ BEGIN
 
         -- 4. Nếu không còn repository nào đang kết nối thuộc github_connection này, xóa token (an toàn bảo mật)
         IF NOT EXISTS (
-            SELECT 1 FROM dbo.repository
+            SELECT 1 FROM [$(SchemaName)].repository
             WHERE connection_id = @connection_id 
               AND id <> @repository_id 
               AND connection_status = 'connected'
         )
         BEGIN
-            UPDATE dbo.github_connection
+            UPDATE [$(SchemaName)].github_connection
             SET access_token_enc = 0x, -- Thu hồi/xóa token mã hóa
                 status = 'revoked',
                 updated_at = SYSUTCDATETIME(),
@@ -291,7 +292,7 @@ GO
 
 -- 4. PROCEDURE: sp_fetch_next_ai_job
 -- Mô tả: Cung cấp hàng đợi cạnh tranh cao cho AI Worker với WITH (ROWLOCK, READPAST, UPDLOCK)
-CREATE OR ALTER PROCEDURE dbo.sp_fetch_next_ai_job
+CREATE OR ALTER PROCEDURE [$(SchemaName)].sp_fetch_next_ai_job
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -301,7 +302,7 @@ BEGIN
 
     ;WITH NextJobCTE AS (
         SELECT TOP(1) id, status, updated_at
-        FROM dbo.ai_job WITH (ROWLOCK, READPAST, UPDLOCK)
+        FROM [$(SchemaName)].ai_job WITH (ROWLOCK, READPAST, UPDLOCK)
         WHERE in_dlq = 0
           AND (
               status = 'pending'
@@ -331,9 +332,9 @@ BEGIN
         se.payload AS event_payload,
         r.full_name AS repo_full_name,
         r.default_branch
-    FROM dbo.ai_job j
+    FROM [$(SchemaName)].ai_job j
     INNER JOIN @selected_job sj ON j.id = sj.id
-    LEFT JOIN dbo.source_event se ON j.source_event_id = se.id
-    LEFT JOIN dbo.repository r ON se.repository_id = r.id;
+    LEFT JOIN [$(SchemaName)].source_event se ON j.source_event_id = se.id
+    LEFT JOIN [$(SchemaName)].repository r ON se.repository_id = r.id;
 END;
 GO

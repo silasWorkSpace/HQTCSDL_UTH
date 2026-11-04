@@ -1,6 +1,11 @@
 -- Module Nguoi 1: dinh danh va nen tang. Chay cho TUNG tenant, bien: SchemaName (vi du ws_demo).
 -- Role cua tenant (role_<SchemaName>) da duoc tao boi platform.sp_create_workspace.
 
+SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+
 -- ===================== app_user =====================
 -- Dung ten app_user vi `user` la tu khoa cua SQL Server.
 CREATE TABLE [$(SchemaName)].app_user (

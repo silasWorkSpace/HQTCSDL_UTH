@@ -1,5 +1,5 @@
 <#
-Tien ich cho database LivingDocs (SQL Server chay trong Docker).
+Tien ich cho database LivingDocs (ho tro ca Docker va SQL Server local).
 Chay tu thu muc backend\infra:
 
   .\db.ps1 up                              Bat SQL Server
@@ -20,7 +20,11 @@ param(
     [ValidatePattern('^[a-z0-9_]{2,30}$')]
     [string]$Code = "demo",
 
-    [string]$Name = "Demo Workspace"
+    [string]$Name = "Demo Workspace",
+
+    [string]$Server = "",
+
+    [switch]$Local
 )
 
 $ErrorActionPreference = "Continue"
@@ -30,15 +34,61 @@ $compose   = Join-Path $infra "docker\docker-compose.yml"
 $container = "livingdocs-mssql"
 $sqlcmd    = "/opt/mssql-tools18/bin/sqlcmd"
 
-# Chay mot file .sql ben trong container. $File tinh tu thu muc mssql, dung dau /.
+function Get-SqlRunner {
+    if ($Local -or ($Server -ne "")) {
+        return "local"
+    }
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        return "local"
+    }
+    # Kiem tra docker daemon co dang chay khong
+    docker ps 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        return "local"
+    }
+    return "docker"
+}
+
+function Get-LocalServer {
+    if ($Server -ne "") { return $Server }
+    # Kiem tra service MSSQLSERVER01
+    $svc = Get-Service -Name "MSSQL`$MSSQLSERVER01" -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq "Running") {
+        return ".\MSSQLSERVER01"
+    }
+    return "localhost"
+}
+
+# Chay mot file .sql. $File tinh tu thu muc mssql.
 function Invoke-Sql {
     param([string]$File, [string]$Db = "livingdocs", [string[]]$Vars = @())
-    $a = @("exec", $container, $sqlcmd, "-S", "localhost", "-U", "sa", "-C", "-I", "-b", "-f", "65001", "-d", $Db)
-    foreach ($v in $Vars) { $a += @("-v", $v) }
-    $a += @("-i", "/scripts/$File")
-    Write-Host ">> $File" -ForegroundColor Cyan
-    & docker @a
-    if ($LASTEXITCODE -ne 0) { throw "Loi khi chay $File" }
+    $runner = Get-SqlRunner
+    Write-Host ">> $File ($runner)" -ForegroundColor Cyan
+
+    if ($runner -eq "docker") {
+        $a = @("exec", $container, $sqlcmd, "-S", "localhost", "-U", "sa", "-C", "-I", "-b", "-f", "65001", "-d", $Db)
+        foreach ($v in $Vars) { $a += @("-v", $v) }
+        $a += @("-i", "/scripts/$File")
+        & docker @a
+        if ($LASTEXITCODE -ne 0) { throw "Loi khi chay $File trong container" }
+    }
+    else {
+        $localServer = Get-LocalServer
+        $localFilePath = Join-Path $mssqlDir $File.Replace('/', '\')
+        $cmdArgs = @("-S", $localServer, "-E", "-I", "-b", "-f", "65001", "-d", $Db)
+        foreach ($v in $Vars) {
+            if ($v -match '^(.*?)=(.*)$') {
+                $varName = $matches[1]
+                $varVal  = $matches[2]
+                $cmdArgs += @("-v", "$varName=`"$varVal`"")
+            } else {
+                $cmdArgs += @("-v", $v)
+            }
+        }
+        $cmdArgs += @("-i", $localFilePath)
+        & sqlcmd @cmdArgs
+        if ($LASTEXITCODE -ne 0) { throw "Loi khi chay $File tren SQL Server local" }
+    }
 }
 
 function Wait-Healthy {
@@ -53,18 +103,33 @@ function Wait-Healthy {
 }
 
 function Start-Db {
-    if (-not (Test-Path (Join-Path $infra "docker\.env"))) {
-        throw "Chua co backend\infra\docker\.env. Hay copy tu .env.example roi dat mat khau."
+    $runner = Get-SqlRunner
+    if ($runner -eq "docker") {
+        if (-not (Test-Path (Join-Path $infra "docker\.env"))) {
+            throw "Chua co backend\infra\docker\.env. Hay copy tu .env.example roi dat mat khau."
+        }
+        docker compose -f $compose up -d
+        if ($LASTEXITCODE -ne 0) { throw "docker compose up bi loi" }
+        Wait-Healthy
     }
-    docker compose -f $compose up -d
-    if ($LASTEXITCODE -ne 0) { throw "docker compose up bi loi" }
-    Wait-Healthy
+    else {
+        Write-Host "Dang su dung SQL Server local tai $(Get-LocalServer)" -ForegroundColor Green
+    }
 }
 
 function Reset-Db {
-    docker compose -f $compose down -v
-    if ($LASTEXITCODE -ne 0) { throw "docker compose down bi loi" }
-    Start-Db
+    $runner = Get-SqlRunner
+    if ($runner -eq "docker") {
+        docker compose -f $compose down -v
+        if ($LASTEXITCODE -ne 0) { throw "docker compose down bi loi" }
+        Start-Db
+    }
+    else {
+        $localServer = Get-LocalServer
+        Write-Host "Reset database tren SQL Server local $localServer" -ForegroundColor Yellow
+        $dropSql = "IF DB_ID('livingdocs') IS NOT NULL BEGIN ALTER DATABASE livingdocs SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE livingdocs; END;"
+        & sqlcmd -S $localServer -E -d master -Q $dropSql
+    }
 }
 
 function Initialize-Db {
@@ -72,7 +137,13 @@ function Initialize-Db {
     Invoke-Sql "00_platform/002_workspace.sql"
     Invoke-Sql "00_platform/003_sp_create_workspace.sql"
     Invoke-Sql "00_platform/004_sp_purge_expired_audit_log.sql"
-    Invoke-Sql "00_platform/005_agent_jobs.sql" -Db master
+    # Agent jobs chi ap dung khi Agent service duoc kich hoat
+    try {
+        Invoke-Sql "00_platform/005_agent_jobs.sql" -Db master
+    }
+    catch {
+        Write-Host "Luu y: Khong khoi tao duoc SQL Server Agent job (co the Agent service dang tat)." -ForegroundColor Yellow
+    }
 }
 
 # Thu muc module: 01_identity, 02_integration, 03_document, 04_workflow (theo thu tu phu thuoc)
@@ -103,35 +174,62 @@ function Import-Seed {
 }
 
 function Invoke-Tests {
+    param([string]$TenantCode = "demo")
+    $schema = "ws_$TenantCode"
     Get-ChildItem (Join-Path $mssqlDir "tests") -Filter *.sql | Sort-Object Name | ForEach-Object {
-        Invoke-Sql "tests/$($_.Name)"
+        Invoke-Sql "tests/$($_.Name)" -Vars @("SchemaName=$schema")
+    }
+    # Chay them bo kiem thu procedure cua 02_integration
+    if (Test-Path (Join-Path $mssqlDir "02_integration\test_procedures.sql")) {
+        Invoke-Sql "02_integration/test_procedures.sql" -Vars @("SchemaName=$schema")
     }
 }
 
 function Backup-Db {
-    Invoke-Sql "00_platform/020_backup_full.sql" -Db master
-    $dest = Join-Path $infra "backup"
-    New-Item -ItemType Directory -Force $dest | Out-Null
-    docker cp "${container}:/var/opt/mssql/data/livingdocs_manual.bak" (Join-Path $dest "livingdocs_manual.bak")
-    if ($LASTEXITCODE -ne 0) { throw "docker cp bi loi" }
-    Write-Host "Da copy file backup ra $dest" -ForegroundColor Green
+    $runner = Get-SqlRunner
+    if ($runner -eq "docker") {
+        Invoke-Sql "00_platform/020_backup_full.sql" -Db master
+        $dest = Join-Path $infra "backup"
+        New-Item -ItemType Directory -Force $dest | Out-Null
+        docker cp "${container}:/var/opt/mssql/data/livingdocs_manual.bak" (Join-Path $dest "livingdocs_manual.bak")
+        if ($LASTEXITCODE -ne 0) { throw "docker cp bi loi" }
+        Write-Host "Da copy file backup ra $dest" -ForegroundColor Green
+    }
+    else {
+        $dest = Join-Path $infra "backup"
+        New-Item -ItemType Directory -Force $dest | Out-Null
+        $bakFile = (Join-Path $dest "livingdocs_manual.bak").Replace('/', '\')
+        $localServer = Get-LocalServer
+        $bakSql = "BACKUP DATABASE livingdocs TO DISK = N'$bakFile' WITH COMPRESSION, CHECKSUM, INIT, STATS = 25;"
+        & sqlcmd -S $localServer -E -d master -Q $bakSql
+        Write-Host "Da backup database thanh cong ra $bakFile" -ForegroundColor Green
+    }
 }
 
 function Test-Restore {
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    Invoke-Sql "00_platform/021_restore_test.sql" -Db master
-    $sw.Stop()
-    Write-Host ("Thoi gian restore va kiem tra: {0:N1} giay (muc tieu RTO: 4 gio)" -f $sw.Elapsed.TotalSeconds) -ForegroundColor Yellow
+    $runner = Get-SqlRunner
+    if ($runner -eq "docker") {
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Invoke-Sql "00_platform/021_restore_test.sql" -Db master
+        $sw.Stop()
+        Write-Host ("Thoi gian restore va kiem tra: {0:N1} giay (muc tieu RTO: 4 gio)" -f $sw.Elapsed.TotalSeconds) -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "Kiem tra restore duoc toi uu hoa cho Docker. Bo qua tren local." -ForegroundColor Yellow
+    }
 }
 
 switch ($Cmd) {
     "up"           { Start-Db }
-    "down"         { docker compose -f $compose down }
+    "down"         {
+        $runner = Get-SqlRunner
+        if ($runner -eq "docker") { docker compose -f $compose down }
+    }
     "reset"        { Reset-Db }
     "init"         { Initialize-Db }
     "tenant"       { New-Tenant $Code $Name }
     "seed"         { Import-Seed $Code }
-    "test"         { Invoke-Tests }
+    "test"         { Invoke-Tests $Code }
     "backup"       { Backup-Db }
     "restore-test" { Test-Restore }
     "rebuild"      {
@@ -141,7 +239,16 @@ switch ($Cmd) {
         New-Tenant "acme" "Acme Corp"
         Import-Seed "demo"
         Import-Seed "acme"
-        Invoke-Tests
+        Invoke-Tests "demo"
     }
-    "shell"        { docker exec -it $container $sqlcmd -S localhost -U sa -C -d livingdocs }
+    "shell"        {
+        $runner = Get-SqlRunner
+        if ($runner -eq "docker") {
+            docker exec -it $container $sqlcmd -S localhost -U sa -C -d livingdocs
+        }
+        else {
+            $localServer = Get-LocalServer
+            & sqlcmd -S $localServer -E -d livingdocs
+        }
+    }
 }
