@@ -3,13 +3,16 @@
 -- PHÂN HỆ: 02_integration (GitHub, Code, Job AI)
 -- TÁC GIẢ: Hiếu aka silas (Integration Subsystem Lead)
 
-
+SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
 
 -- 1. BẢNG: github_connection
 -- Mô tả: Lưu trữ thông tin kết nối và xác thực GitHub App của Workspace/Tenant
-IF OBJECT_ID(N'dbo.github_connection', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].github_connection', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.github_connection
+    CREATE TABLE [$(SchemaName)].github_connection
     (
         id                  UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_github_connection_id DEFAULT NEWSEQUENTIALID(),
         installation_id     NVARCHAR(100)       NOT NULL,
@@ -36,9 +39,9 @@ GO
 
 -- 2. BẢNG: repository
 -- Mô tả: Quản lý danh sách kho mã nguồn GitHub được tích hợp vào Workspace
-IF OBJECT_ID(N'dbo.repository', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].repository', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.repository
+    CREATE TABLE [$(SchemaName)].repository
     (
         id                  UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_repository_id DEFAULT NEWSEQUENTIALID(),
         connection_id       UNIQUEIDENTIFIER    NOT NULL,
@@ -59,7 +62,7 @@ BEGIN
         CONSTRAINT pk_repository PRIMARY KEY CLUSTERED (id),
         CONSTRAINT uq_repository_connection_github_repo UNIQUE (connection_id, github_repo_id),
         CONSTRAINT fk_repository_connection FOREIGN KEY (connection_id) 
-            REFERENCES dbo.github_connection(id) ON DELETE CASCADE,
+            REFERENCES [$(SchemaName)].github_connection(id) ON DELETE CASCADE,
         CONSTRAINT ck_repository_connection_status CHECK (connection_status IN ('connected', 'disconnected', 'syncing', 'error'))
     );
 END;
@@ -68,9 +71,9 @@ GO
 -- 3. BẢNG: source_event
 -- Mô tả: Lưu trữ nhật ký sự kiện mã nguồn (Webhook/Pull Request/Commit) 
 -- Có cơ chế correlation_id truy vết và delivery_id khử trùng lặp (Idempotent)
-IF OBJECT_ID(N'dbo.source_event', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].source_event', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.source_event
+    CREATE TABLE [$(SchemaName)].source_event
     (
         id                      UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_source_event_id DEFAULT NEWSEQUENTIALID(),
         repository_id           UNIQUEIDENTIFIER    NOT NULL,
@@ -95,7 +98,7 @@ BEGIN
         CONSTRAINT pk_source_event PRIMARY KEY CLUSTERED (id),
         CONSTRAINT uq_source_event_delivery_id UNIQUE (delivery_id),
         CONSTRAINT fk_source_event_repository FOREIGN KEY (repository_id) 
-            REFERENCES dbo.repository(id) ON DELETE CASCADE,
+            REFERENCES [$(SchemaName)].repository(id) ON DELETE CASCADE,
         CONSTRAINT ck_source_event_event_type CHECK (event_type IN ('pr', 'commit', 'merge')),
         CONSTRAINT ck_source_event_state CHECK (state IN ('open', 'closed', 'merged')),
         CONSTRAINT ck_source_event_payload_json CHECK (payload IS NULL OR ISJSON(payload) = 1)
@@ -106,9 +109,9 @@ GO
 -- 4. BẢNG: code_entity
 -- Mô tả: Lưu trữ các thực thể mã nguồn bóc tách từ AST (Class, Method, Endpoint, Parameter)
 -- Phục vụ liên kết tài liệu và phát hiện Drift
-IF OBJECT_ID(N'dbo.code_entity', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].code_entity', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.code_entity
+    CREATE TABLE [$(SchemaName)].code_entity
     (
         id              UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_code_entity_id DEFAULT NEWSEQUENTIALID(),
         repository_id   UNIQUEIDENTIFIER    NOT NULL,
@@ -130,9 +133,9 @@ BEGIN
         -- Constraints
         CONSTRAINT pk_code_entity PRIMARY KEY CLUSTERED (id),
         CONSTRAINT fk_code_entity_repository FOREIGN KEY (repository_id) 
-            REFERENCES dbo.repository(id) ON DELETE CASCADE,
+            REFERENCES [$(SchemaName)].repository(id) ON DELETE CASCADE,
         CONSTRAINT fk_code_entity_parent FOREIGN KEY (parent_id) 
-            REFERENCES dbo.code_entity(id),
+            REFERENCES [$(SchemaName)].code_entity(id),
         CONSTRAINT ck_code_entity_kind CHECK (kind IN ('class', 'method', 'endpoint', 'parameter'))
     );
 END;
@@ -141,9 +144,9 @@ GO
 -- 5. BẢNG: ai_job
 -- Mô tả: Quản lý hàng đợi tác vụ AI (AST parsing, Drift detection, Doc update, Embedding)
 -- Hỗ trợ cơ chế Exponential Backoff retry và Dead Letter Queue (DLQ)
-IF OBJECT_ID(N'dbo.ai_job', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].ai_job', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.ai_job
+    CREATE TABLE [$(SchemaName)].ai_job
     (
         id                  UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_ai_job_id DEFAULT NEWSEQUENTIALID(),
         job_type            VARCHAR(50)         NOT NULL,
@@ -166,7 +169,7 @@ BEGIN
         -- Constraints
         CONSTRAINT pk_ai_job PRIMARY KEY CLUSTERED (id),
         CONSTRAINT fk_ai_job_source_event FOREIGN KEY (source_event_id) 
-            REFERENCES dbo.source_event(id) ON DELETE SET NULL,
+            REFERENCES [$(SchemaName)].source_event(id) ON DELETE SET NULL,
         CONSTRAINT ck_ai_job_retry_count CHECK (retry_count >= 0 AND retry_count <= 3),
         CONSTRAINT ck_ai_job_status CHECK (status IN ('pending', 'running', 'completed', 'failed', 'retrying', 'cancelled')),
         CONSTRAINT ck_ai_job_job_type CHECK (job_type IN ('ast_parsing', 'drift_detection', 'doc_generation', 'doc_update', 'embedding_indexing'))
@@ -177,9 +180,9 @@ GO
 -- 6. BẢNG: embedding
 -- Mô tả: Lưu trữ metadata và tham chiếu Vector Store cho tìm kiếm ngữ nghĩa RAG
 -- (Vector thực tế nằm ở Vector Store chuyên dụng, theo đúng thiết kế SRS)
-IF OBJECT_ID(N'dbo.embedding', N'U') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].embedding', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.embedding
+    CREATE TABLE [$(SchemaName)].embedding
     (
         id                  UNIQUEIDENTIFIER    NOT NULL CONSTRAINT df_embedding_id DEFAULT NEWSEQUENTIALID(),
         source_type         VARCHAR(50)         NOT NULL,
@@ -204,11 +207,11 @@ GO
 
 -- RÀNG BUỘC NGOẠI KHÁC MODULE
 -- Tham chiếu app_user nếu bảng app_user đã được tạo bởi Module 01_identity
-IF OBJECT_ID(N'dbo.app_user', N'U') IS NOT NULL
-   AND OBJECT_ID(N'dbo.fk_github_connection_connected_by', N'F') IS NULL
+IF OBJECT_ID(N'[$(SchemaName)].app_user', N'U') IS NOT NULL
+   AND OBJECT_ID(N'[$(SchemaName)].fk_github_connection_connected_by', N'F') IS NULL
 BEGIN
-    ALTER TABLE dbo.github_connection
+    ALTER TABLE [$(SchemaName)].github_connection
     ADD CONSTRAINT fk_github_connection_connected_by
-        FOREIGN KEY (connected_by) REFERENCES dbo.app_user(id);
+        FOREIGN KEY (connected_by) REFERENCES [$(SchemaName)].app_user(id);
 END;
 GO
