@@ -1,0 +1,32 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: document-service
+  datasource:
+    url: ${DB_URL:jdbc:sqlserver://localhost:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:LivingDocsPassw0rd!}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    consumer:
+      group-id: document-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
