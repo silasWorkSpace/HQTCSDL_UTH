@@ -13,3 +13,4 @@ ENV JWT_SECRET=LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!
 EXPOSE 8085
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
+

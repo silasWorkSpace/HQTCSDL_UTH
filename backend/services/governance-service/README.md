@@ -34,3 +34,4 @@ hoặc với Docker:
 docker build -t livingdocs-governance-service .
 docker run -p 8085:8085 livingdocs-governance-service
 ```
+
