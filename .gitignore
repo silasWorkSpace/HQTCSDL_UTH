@@ -28,6 +28,10 @@ node_modules/
 # Build output
 dist/
 **/dist/
+**/target/
+.pytest_cache/
+__pycache__/
+*.py[cod]
 
 # Environment variables and secrets
 .env
@@ -49,3 +53,8 @@ Thumbs.db
 # Database local test scripts
 backend/infra/mssql/02_integration/test_procedures.sql
 backend/infra/mssql/02_integration/benchmark_100k_code_entity.sql
+
+# Backend local test files and scripts
+backend/services/integration-service/src/test/
+backend/services/integration-service/send_mock_webhook.ps1
+backend/ai-engine/tests/

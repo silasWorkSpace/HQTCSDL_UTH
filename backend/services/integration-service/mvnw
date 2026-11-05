@@ -1,0 +1,13 @@
+#!/bin/sh
+# ----------------------------------------------------------------------------
+# LivingDocs Maven Wrapper for Linux/macOS
+# ----------------------------------------------------------------------------
+
+if command -v mvn >/dev/null 2>&1; then
+    exec mvn "$@"
+elif [ -d "$HOME/.m2/maven-3.9.9/bin" ]; then
+    exec "$HOME/.m2/maven-3.9.9/bin/mvn" "$@"
+else
+    echo "[ERROR] Maven command 'mvn' not found in PATH." >&2
+    exit 1
+fi
