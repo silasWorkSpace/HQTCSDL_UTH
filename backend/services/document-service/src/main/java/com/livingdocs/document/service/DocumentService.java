@@ -49,41 +49,94 @@ public class DocumentService {
             actorUserId = SecurityUtils.getCurrentUserId();
         } catch (Exception ignored) {}
 
+        // Resolve repositoryId: if not provided, pick first available repository in workspace
+        UUID repoId = req.repositoryId();
+        if (repoId == null) {
+            List<UUID> repos = jdbcTemplate.query(
+                String.format("SELECT TOP 1 id FROM [%s].[repository] ORDER BY created_at ASC", schema),
+                (rs, rn) -> rs.getObject("id", UUID.class)
+            );
+            if (!repos.isEmpty()) {
+                repoId = repos.get(0);
+            }
+        }
+
+        // Resolve pathInRepo: if not provided, generate default path
+        String pathInRepo = req.pathInRepo();
+        if (pathInRepo == null || pathInRepo.isBlank()) {
+            String sanitized = req.title() != null
+                ? req.title().trim().toLowerCase().replaceAll("[^a-z0-9]+", "-")
+                : "untitled";
+            if (sanitized.startsWith("-")) sanitized = sanitized.substring(1);
+            if (sanitized.endsWith("-")) sanitized = sanitized.substring(0, sanitized.length() - 1);
+            pathInRepo = "docs/" + (sanitized.isBlank() ? "untitled" : sanitized) + ".md";
+        }
+
+        // Resolve ownerId & actorUserId: ensure user actually exists in app_user table
+        UUID validUserId = actorUserId;
+        if (validUserId != null) {
+            Integer exists = jdbcTemplate.queryForObject(
+                String.format("SELECT COUNT(*) FROM [%s].[app_user] WHERE id = ?", schema),
+                Integer.class,
+                validUserId
+            );
+            if (exists == null || exists == 0) {
+                validUserId = null;
+            }
+        }
+        if (validUserId == null) {
+            List<UUID> users = jdbcTemplate.query(
+                String.format("SELECT TOP 1 id FROM [%s].[app_user] ORDER BY created_at ASC", schema),
+                (rs, rn) -> rs.getObject("id", UUID.class)
+            );
+            if (!users.isEmpty()) {
+                validUserId = users.get(0);
+            }
+        }
+
         String callSql = String.format(
             "{CALL [%s].[sp_create_document](?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}",
             schema
         );
 
         final String finalActorRole = actorRole != null ? actorRole : "Developer";
-        final UUID finalActorUserId = actorUserId;
+        final UUID finalActorUserId = validUserId;
+        final UUID finalRepoId = repoId;
+        final String finalPathInRepo = pathInRepo;
 
-        UUID createdDocId = jdbcTemplate.execute((java.sql.Connection conn) -> {
-            try (CallableStatement cs = conn.prepareCall(callSql)) {
-                cs.setObject(1, req.repositoryId());
-                cs.setString(2, req.docType());
-                cs.setString(3, req.title());
-                cs.setString(4, req.pathInRepo());
-                cs.setObject(5, finalActorUserId != null ? finalActorUserId : UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                cs.setString(6, req.content());
-                cs.setString(7, finalActorRole);
-                cs.setObject(8, finalActorUserId);
-                cs.setString(9, "MANUAL_EDIT");
-                cs.setString(10, "DRAFT");
-                cs.setObject(11, req.templateId());
-                cs.setObject(12, req.collectionId());
-                cs.setString(13, null);
-                cs.setNull(14, Types.INTEGER);
-                cs.setString(15, null);
-                cs.setBoolean(16, true);
-                cs.registerOutParameter(17, Types.CHAR);
-                cs.registerOutParameter(18, Types.CHAR);
+        UUID createdDocId;
+        try {
+            createdDocId = jdbcTemplate.execute((java.sql.Connection conn) -> {
+                try (CallableStatement cs = conn.prepareCall(callSql)) {
+                    cs.setObject(1, finalRepoId);
+                    cs.setString(2, req.docType());
+                    cs.setString(3, req.title());
+                    cs.setString(4, finalPathInRepo);
+                    cs.setObject(5, finalActorUserId);
+                    cs.setString(6, req.content());
+                    cs.setString(7, finalActorRole);
+                    cs.setObject(8, finalActorUserId);
+                    cs.setString(9, "MANUAL_EDIT");
+                    cs.setString(10, "DRAFT");
+                    cs.setObject(11, req.templateId());
+                    cs.setObject(12, req.collectionId());
+                    cs.setString(13, null);
+                    cs.setNull(14, Types.INTEGER);
+                    cs.setString(15, null);
+                    cs.setBoolean(16, true);
+                    cs.registerOutParameter(17, Types.CHAR);
+                    cs.registerOutParameter(18, Types.CHAR);
 
-                cs.execute();
+                    cs.execute();
 
-                String docIdStr = cs.getString(17);
-                return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
-            }
-        });
+                    String docIdStr = cs.getString(17);
+                    return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
+                }
+            });
+        } catch (Exception ex) {
+            log.error("Loi khi tao tai lieu qua sp_create_document tren schema {}: {}", schema, ex.getMessage(), ex);
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể tạo tài liệu", "Lỗi CSDL: " + ex.getMessage());
+        }
 
         if (createdDocId == null) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể tạo tài liệu", "Lỗi tạo tài liệu từ cơ sở dữ liệu.");
@@ -319,7 +372,17 @@ public class DocumentService {
                 // Read OUT parameter after consuming all result sets in TDS protocol
                 boolean isValid = cs.getBoolean(2);
 
-                return new IntegrityVerificationResponse(documentId, isValid, problems);
+                int totalVersions = 0;
+                try {
+                    Integer count = jdbcTemplate.queryForObject(
+                        String.format("SELECT COUNT(*) FROM [%s].[document_version] WHERE document_id = ?", schema),
+                        Integer.class,
+                        documentId
+                    );
+                    if (count != null) totalVersions = count;
+                } catch (Exception ignored) {}
+
+                return new IntegrityVerificationResponse(documentId, isValid, totalVersions, problems);
             }
         });
     }

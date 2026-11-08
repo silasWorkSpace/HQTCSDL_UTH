@@ -6,6 +6,7 @@ import java.util.UUID;
 public class IntegrityVerificationResponse {
     private UUID documentId;
     private Boolean isValid;
+    private Integer totalVersionsVerified;
     private List<IntegrityProblem> problems;
 
     public static class IntegrityProblem {
@@ -37,10 +38,19 @@ public class IntegrityVerificationResponse {
         this.problems = problems;
     }
 
+    public IntegrityVerificationResponse(UUID documentId, Boolean isValid, Integer totalVersionsVerified, List<IntegrityProblem> problems) {
+        this.documentId = documentId;
+        this.isValid = isValid;
+        this.totalVersionsVerified = totalVersionsVerified;
+        this.problems = problems;
+    }
+
     public UUID getDocumentId() { return documentId; }
     public void setDocumentId(UUID documentId) { this.documentId = documentId; }
     public Boolean getIsValid() { return isValid; }
     public void setIsValid(Boolean isValid) { this.isValid = isValid; }
+    public Integer getTotalVersionsVerified() { return totalVersionsVerified; }
+    public void setTotalVersionsVerified(Integer totalVersionsVerified) { this.totalVersionsVerified = totalVersionsVerified; }
     public List<IntegrityProblem> getProblems() { return problems; }
     public void setProblems(List<IntegrityProblem> problems) { this.problems = problems; }
 }

@@ -24,6 +24,8 @@ public class DocumentResponse {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public UUID getDocumentId() { return id; }
+    public void setDocumentId(UUID documentId) { if (this.id == null) this.id = documentId; }
     public UUID getRepositoryId() { return repositoryId; }
     public void setRepositoryId(UUID repositoryId) { this.repositoryId = repositoryId; }
     public String getDocType() { return docType; }

@@ -138,21 +138,24 @@ public class ReviewService {
         DocumentRow doc = repo.findDocument(tenant, task.documentId())
                 .orElseThrow(() -> notFound("Tài liệu"));
         String actorRole = primaryRole(user);
+        String stepRole = "Staff".equalsIgnoreCase(level)
+                ? (user.hasAnyRole("Staff") ? "Staff" : actorRole)
+                : (user.hasAnyRole("Manager") ? "Manager" : actorRole);
         UUID nextTaskId = null;
 
         switch (request.decision()) {
-            case APPROVE -> nextTaskId = approve(tenant, task, doc, user, actorRole);
+            case APPROVE -> nextTaskId = approve(tenant, task, doc, user, stepRole);
             case REJECT -> {
                 if (reasonMissing(request)) {
                     throw badRequest("Từ chối bắt buộc kèm lý do");
                 }
-                repo.transitionDocument(tenant, doc.id(), "REJECTED", actorRole, user.userId());
+                repo.transitionDocument(tenant, doc.id(), "REJECTED", stepRole, user.userId());
                 repo.updateTaskStatus(tenant, taskId, "Rejected");
                 notify.notifyUser(tenant, doc.ownerId(), "DOC_REJECTED",
                         "Tài liệu \"" + doc.title() + "\" bị từ chối: " + request.reason(), null);
             }
             case REQUEST_CHANGES -> {
-                repo.transitionDocument(tenant, doc.id(), "CHANGES_REQUESTED", actorRole, user.userId());
+                repo.transitionDocument(tenant, doc.id(), "CHANGES_REQUESTED", stepRole, user.userId());
                 repo.updateTaskStatus(tenant, taskId, "Changes Requested");
                 notify.notifyUser(tenant, doc.ownerId(), "DOC_CHANGES_REQUESTED",
                         "Tài liệu \"" + doc.title() + "\" bị trả lại để sửa", null);
@@ -161,7 +164,8 @@ public class ReviewService {
                 if (!"Manager".equals(level)) {
                     throw badRequest("Chỉ Manager được trả lại bản về Staff");
                 }
-                repo.transitionDocument(tenant, doc.id(), "IN_REVIEW_STAFF", actorRole, user.userId());
+                String returnRole = user.hasAnyRole("Manager") ? "Manager" : actorRole;
+                repo.transitionDocument(tenant, doc.id(), "IN_REVIEW_STAFF", returnRole, user.userId());
                 repo.updateTaskStatus(tenant, taskId, "Returned");
                 repo.insertReviewTask(tenant, doc.id(), task.documentVersionId(), "Staff",
                         task.submitterId());

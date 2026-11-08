@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:livingdocs};encrypt=true;trustServerCertificate=true
     username: ${DB_USER:sa}
-    password: ${DB_PASSWORD:ChangeMe_Str0ng!}
+    password: ${DB_PASSWORD:Living_Docs_2026!}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
@@ -20,7 +20,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
   kafka:
-    enabled: ${KAFKA_ENABLED:false}
+    enabled: ${KAFKA_ENABLED:true}
 
 management:
   endpoints:

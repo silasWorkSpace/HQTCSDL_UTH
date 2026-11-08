@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:livingdocs};encrypt=true;trustServerCertificate=true
     username: ${DB_USER:sa}
-    password: ${DB_PASSWORD}
+    password: ${DB_PASSWORD:Living_Docs_2026!}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -28,7 +28,7 @@ logging:
 
 livingdocs:
   security:
-    jwt-secret: ${JWT_SECRET}
+    jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
     issuer: livingdocs
     access-token-ttl: 15m
     public-paths:

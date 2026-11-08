@@ -23,6 +23,9 @@ public final class TenantContext {
     }
 
     public static void set(String code) {
+        if (code != null && code.startsWith("ws_")) {
+            code = code.substring(3);
+        }
         if (!isValid(code)) {
             throw new IllegalArgumentException("Mã tenant không hợp lệ: " + code);
         }
@@ -32,6 +35,10 @@ public final class TenantContext {
     public static void setTenant(String code) {
         if (code == null || code.isBlank()) {
             code = "demo";
+        }
+        code = code.trim();
+        if (code.startsWith("ws_")) {
+            code = code.substring(3);
         }
         if (isValid(code)) {
             CURRENT.set(code);
