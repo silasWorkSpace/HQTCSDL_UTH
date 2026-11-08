@@ -18,6 +18,7 @@ public class DocumentVersionResponse {
     private String sourcePrKind;
     private String reason;
     private Integer rolledBackFromVersionNo;
+    private Boolean requiresReview;
     private Instant createdAt;
 
     public DocumentVersionResponse() {}
@@ -50,6 +51,8 @@ public class DocumentVersionResponse {
     public void setReason(String reason) { this.reason = reason; }
     public Integer getRolledBackFromVersionNo() { return rolledBackFromVersionNo; }
     public void setRolledBackFromVersionNo(Integer rolledBackFromVersionNo) { this.rolledBackFromVersionNo = rolledBackFromVersionNo; }
+    public Boolean getRequiresReview() { return requiresReview; }
+    public void setRequiresReview(Boolean requiresReview) { this.requiresReview = requiresReview; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

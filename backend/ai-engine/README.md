@@ -58,7 +58,7 @@ Module phụ trách tích hợp và trừu tượng hóa mô hình ngôn ngữ l
 | :--- | :--- | :--- |
 | `LLM_PROVIDER` | `mock` | Nhà cung cấp LLM (`mock`, `openai`, `gemini`,...) |
 | `LLM_MODEL` | `mock-model-v1` | Tên model sử dụng |
-| `PORT` | `8000` | Cổng dịch vụ FastAPI |
+| `PORT` | `8090` | Cổng dịch vụ FastAPI |
 
 ---
 
@@ -68,14 +68,14 @@ Module phụ trách tích hợp và trừu tượng hóa mô hình ngôn ngữ l
 ```bash
 cd backend/ai-engine
 pip install -r requirements.txt
-uvicorn app.main:app --port 8000 --reload
+uvicorn app.main:app --port 8090 --reload
 ```
 
 ### 4.2. Môi trường Docker
 ```bash
 cd backend/ai-engine
 docker build -t livingdocs-ai-engine .
-docker run -p 8000:8000 livingdocs-ai-engine
+docker run -p 8090:8090 livingdocs-ai-engine
 ```
 
 ---

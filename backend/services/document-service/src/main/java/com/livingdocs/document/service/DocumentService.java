@@ -1,5 +1,6 @@
 package com.livingdocs.document.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.difflib.DiffUtils;
 import com.github.difflib.patch.AbstractDelta;
 import com.github.difflib.patch.Patch;
@@ -9,6 +10,8 @@ import com.livingdocs.common.events.GenerateDocPayload;
 import com.livingdocs.common.security.SecurityUtils;
 import com.livingdocs.common.security.TenantContext;
 import com.livingdocs.document.dto.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -22,12 +25,16 @@ import java.util.*;
 @Service
 public class DocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+
     private final JdbcTemplate jdbcTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-    public DocumentService(JdbcTemplate jdbcTemplate, KafkaTemplate<String, Object> kafkaTemplate) {
+    public DocumentService(JdbcTemplate jdbcTemplate, KafkaTemplate<String, Object> kafkaTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public List<DocumentResponse> listDocuments(UUID repositoryId, String docStatus, int page, int size) {
@@ -119,6 +126,15 @@ public class DocumentService {
                 String newVerIdStr = cs.getString(13);
                 int newVerNo = cs.getInt(14);
 
+                // If document was in CHANGES_REQUESTED, transition it back to DRAFT via sp_update_document_state
+                if ("CHANGES_REQUESTED".equalsIgnoreCase(doc.getDocStatus())) {
+                    String updateStateSql = String.format(
+                        "{CALL [%s].[sp_update_document_state](?, ?, ?, ?, ?, ?, ?, ?)}",
+                        schema
+                    );
+                    jdbcTemplate.update(updateStateSql, id, "DRAFT", null, null, null, null, false, userId);
+                }
+
                 return getDocumentVersion(id, newVerNo);
             }
         });
@@ -198,7 +214,14 @@ public class DocumentService {
                 cs.execute();
 
                 int newVerNo = cs.getInt(7);
-                return getDocumentVersion(documentId, newVerNo);
+                boolean requiresReview = cs.getBoolean(8);
+                if (requiresReview) {
+                    log.info("Document {} rolled back to v{} and requires review", documentId, req.getTargetVersionNo());
+                }
+
+                DocumentVersionResponse res = getDocumentVersion(documentId, newVerNo);
+                res.setRequiresReview(requiresReview);
+                return res;
             }
         });
     }
@@ -216,8 +239,6 @@ public class DocumentService {
                 cs.registerOutParameter(2, Types.BOOLEAN);
 
                 boolean hasResultSet = cs.execute();
-                boolean isValid = cs.getBoolean(2);
-
                 List<IntegrityVerificationResponse.IntegrityProblem> problems = new ArrayList<>();
                 if (hasResultSet) {
                     try (ResultSet rs = cs.getResultSet()) {
@@ -230,6 +251,8 @@ public class DocumentService {
                         }
                     }
                 }
+                // Read OUT parameter after consuming all result sets in TDS protocol
+                boolean isValid = cs.getBoolean(2);
 
                 return new IntegrityVerificationResponse(documentId, isValid, problems);
             }
@@ -287,15 +310,13 @@ public class DocumentService {
         TenantContext.setTenant(envelope.getTenant() != null ? envelope.getTenant() : "demo");
         String schema = TenantContext.getSchema();
 
-        UUID docId = UUID.randomUUID();
-        UUID verId = UUID.randomUUID();
-
+        // Stored procedure sp_create_document has 18 parameters (16 IN, 2 OUT)
         String callSql = String.format(
-            "{CALL [%s].[sp_create_document](?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}",
+            "{CALL [%s].[sp_create_document](?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}",
             schema
         );
 
-        jdbcTemplate.execute((java.sql.Connection conn) -> {
+        UUID createdDocId = jdbcTemplate.execute((java.sql.Connection conn) -> {
             try (CallableStatement cs = conn.prepareCall(callSql)) {
                 cs.setObject(1, p.getRepositoryId());
                 cs.setString(2, p.getDocType() != null ? p.getDocType() : "README");
@@ -314,11 +335,71 @@ public class DocumentService {
                 cs.setString(15, null);        // source_pr_kind
                 cs.setBoolean(16, true);       // auto_update_enabled
                 cs.registerOutParameter(17, Types.CHAR); // document_id OUTPUT
+                cs.registerOutParameter(18, Types.CHAR); // version_id OUTPUT
 
                 cs.execute();
-                return null;
+
+                String docIdStr = cs.getString(17);
+                return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
             }
         });
+
+        if (createdDocId != null) {
+            // 1. Link commit SHA to document (FR-GEN-04 / KB-02)
+            if (p.getSourceCommitSha() != null && !p.getSourceCommitSha().isBlank()) {
+                try {
+                    String insCommitLink = String.format(
+                        "INSERT INTO [%s].[doc_code_link] (document_id, link_type, external_ref) VALUES (?, 'COMMIT', ?)",
+                        schema
+                    );
+                    jdbcTemplate.update(insCommitLink, createdDocId, p.getSourceCommitSha());
+                } catch (Exception ex) {
+                    log.warn("Failed to insert commit link: {}", ex.getMessage());
+                }
+            }
+
+            // 2. Link Code Entities from evidence list (FR-GEN-04 / KB-05)
+            if (p.getEvidenceList() != null && !p.getEvidenceList().isEmpty() && p.getRepositoryId() != null) {
+                for (DocDraftPayload.EvidenceItem ev : p.getEvidenceList()) {
+                    if (ev.getEntityName() != null && !ev.getEntityName().isBlank()) {
+                        try {
+                            String findEntitySql = String.format(
+                                "SELECT TOP 1 id FROM [%s].[code_entity] WHERE repository_id = ? AND name = ? AND removed_at IS NULL",
+                                schema
+                            );
+                            List<UUID> matching = jdbcTemplate.query(findEntitySql, (rs, rn) -> UUID.fromString(rs.getString("id")), p.getRepositoryId(), ev.getEntityName());
+                            if (!matching.isEmpty()) {
+                                String insCodeLink = String.format(
+                                    "INSERT INTO [%s].[doc_code_link] (document_id, link_type, code_entity_id) VALUES (?, 'CODE_ENTITY', ?)",
+                                    schema
+                                );
+                                jdbcTemplate.update(insCodeLink, createdDocId, matching.get(0));
+                            }
+                        } catch (Exception ex) {
+                            log.debug("Skipping duplicate or missing code link: {}", ex.getMessage());
+                        }
+                    }
+                }
+            }
+
+            // 3. Save initial update_suggestion with confidence & evidence (FR-GEN-08, 09)
+            try {
+                String checkSugSql = String.format("SELECT 1 FROM sys.tables WHERE object_id = OBJECT_ID('[%s].[update_suggestion]')", schema);
+                List<Integer> hasSug = jdbcTemplate.query(checkSugSql, (rs, rn) -> 1);
+                if (!hasSug.isEmpty()) {
+                    double conf = p.getOverallConfidence() != null ? Math.min(1.0, Math.max(0.0, p.getOverallConfidence())) : 0.90;
+                    String evidenceJson = p.getEvidenceList() != null ? objectMapper.writeValueAsString(p.getEvidenceList()) : null;
+                    String insSugSql = String.format(
+                        "INSERT INTO [%s].[update_suggestion] (document_id, origin, content, confidence_score, evidence, status, auto_apply_eligible) " +
+                        "VALUES (?, 'AI_GENERATION', ?, ?, ?, 'Accepted', 0)",
+                        schema
+                    );
+                    jdbcTemplate.update(insSugSql, createdDocId, p.getMarkdownContent(), conf, evidenceJson);
+                }
+            } catch (Exception ex) {
+                log.warn("Could not save initial update_suggestion: {}", ex.getMessage());
+            }
+        }
     }
 
     private DocumentResponse mapDocumentResponse(ResultSet rs) throws java.sql.SQLException {

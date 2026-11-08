@@ -97,3 +97,12 @@ def test_factory_default_provider():
     assert isinstance(provider, MockProvider)
     with pytest.raises(ValueError):
         get_llm_provider("unsupported_provider")
+
+def test_top_level_generate_doc_contract():
+    from app.llm import generate_doc
+    entities = [{"name": "OrderService", "kind": "class", "file_path": "src/services/OrderService.java"}]
+    template = {"name": "README", "doc_type": "README"}
+    draft = generate_doc(entities, template, {"commit_sha": "abc1234"})
+    assert isinstance(draft, DocDraft)
+    assert draft.document_title == "README"
+    assert draft.commit_reference == "abc1234"

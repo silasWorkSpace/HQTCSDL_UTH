@@ -30,11 +30,13 @@ public class TemplateController {
     }
 
     @GetMapping("/templates")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<TemplateResponse>> listTemplates() {
         return ResponseEntity.ok(templateService.listTemplates());
     }
 
     @GetMapping("/templates/{id}")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<TemplateResponse> getTemplateById(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(templateService.getTemplateById(id));
     }
@@ -45,6 +47,13 @@ public class TemplateController {
             @PathVariable("id") UUID id,
             @Valid @RequestBody CreateTemplateRequest req) {
         return ResponseEntity.ok(templateService.updateTemplate(id, req));
+    }
+
+    @DeleteMapping("/templates/{id}")
+    @PreAuthorize("hasAnyRole('Technical Lead', 'Manager', 'Administrator')")
+    public ResponseEntity<Void> archiveTemplate(@PathVariable("id") UUID id) {
+        templateService.archiveTemplate(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/templates/{id}/clone")
@@ -63,6 +72,7 @@ public class TemplateController {
     }
 
     @GetMapping("/collections")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<CollectionResponse>> listCollections() {
         return ResponseEntity.ok(templateService.listCollections());
     }

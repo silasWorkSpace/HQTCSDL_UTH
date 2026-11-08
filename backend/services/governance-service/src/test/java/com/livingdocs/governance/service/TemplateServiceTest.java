@@ -36,5 +36,12 @@ class TemplateServiceTest {
         assertThrows(IllegalArgumentException.class, () -> templateService.validateJson(""));
         assertThrows(IllegalArgumentException.class, () -> templateService.validateJson(null));
     }
+
+    @Test
+    void testArchiveTemplate_NotFound() {
+        java.util.UUID randomId = java.util.UUID.randomUUID();
+        Mockito.when(jdbcTemplate.update(Mockito.anyString(), Mockito.any(), Mockito.eq(randomId))).thenReturn(0);
+        assertThrows(RuntimeException.class, () -> templateService.archiveTemplate(randomId));
+    }
 }
 

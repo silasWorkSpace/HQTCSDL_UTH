@@ -22,6 +22,7 @@ public class DocumentController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<DocumentResponse>> listDocuments(
             @RequestParam(value = "repositoryId", required = false) UUID repositoryId,
             @RequestParam(value = "docStatus", required = false) String docStatus,
@@ -31,6 +32,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<DocumentResponse> getDocumentById(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getDocumentById(id));
     }
@@ -44,11 +46,13 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}/versions")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<DocumentVersionResponse>> getVersions(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getDocumentVersions(id));
     }
 
     @GetMapping("/{id}/versions/{n}")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<DocumentVersionResponse> getVersion(
             @PathVariable("id") UUID id,
             @PathVariable("n") int n) {
@@ -56,6 +60,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}/diff")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<DiffResponse> getDiff(
             @PathVariable("id") UUID id,
             @RequestParam("from") int from,
@@ -64,7 +69,7 @@ public class DocumentController {
     }
 
     @PostMapping("/{id}/rollback")
-    @PreAuthorize("hasAnyRole('Developer', 'Manager', 'Technical Lead', 'Administrator')")
+    @PreAuthorize("hasAnyRole('Developer', 'Manager', 'Technical Lead')")
     public ResponseEntity<DocumentVersionResponse> rollback(
             @PathVariable("id") UUID id,
             @Valid @RequestBody RollbackRequest req) {
@@ -72,11 +77,13 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}/integrity")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<IntegrityVerificationResponse> verifyIntegrity(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.verifyIntegrity(id));
     }
 
     @GetMapping("/{id}/links")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<DocCodeLinkResponse>> getLinks(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getDocumentLinks(id));
     }

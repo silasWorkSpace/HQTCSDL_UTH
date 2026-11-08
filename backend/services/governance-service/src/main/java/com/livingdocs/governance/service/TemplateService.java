@@ -187,6 +187,20 @@ public class TemplateService {
         return createTemplate(req);
     }
 
+    @Transactional
+    public void archiveTemplate(UUID id) {
+        String schema = TenantContext.getSchema();
+        UUID userId = SecurityUtils.getCurrentUserId();
+        String sql = String.format(
+            "UPDATE [%s].[template] SET status = 'ARCHIVED', updated_at = SYSUTCDATETIME(), updated_by = ? WHERE id = ?",
+            schema
+        );
+        int rows = jdbcTemplate.update(sql, userId, id);
+        if (rows == 0) {
+            throw new RuntimeException("Template not found: " + id);
+        }
+    }
+
     public List<CollectionResponse> listCollections() {
         String schema = TenantContext.getSchema();
         String sql = String.format(

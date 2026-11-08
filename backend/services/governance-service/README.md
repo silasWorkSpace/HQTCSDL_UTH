@@ -14,6 +14,7 @@ Service quản lý tài liệu mẫu (Template) và bộ sưu tập (Collection)
 - `GET /api/v1/governance/templates` - Danh sách templates
 - `GET /api/v1/governance/templates/{id}` - Chi tiết template
 - `PUT /api/v1/governance/templates/{id}` - Cập nhật template (tạo version mới)
+- `DELETE /api/v1/governance/templates/{id}` - Lưu trữ / Vô hiệu hóa template (Archive)
 - `POST /api/v1/governance/templates/{id}/clone` - Nhân bản template
 - `POST /api/v1/governance/templates/seed` - Chạy seed template & collection mặc định
 - `GET /api/v1/governance/collections` - Danh sách collection
