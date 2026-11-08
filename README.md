@@ -50,11 +50,45 @@ Sau khi chạy thành công, mở địa chỉ local được hiển thị trong
 
 ## 6. Chạy Backend
 
-Backend hiện được quản lý riêng trong thư mục `backend/`.
+Backend hiện được quản lý trong thư mục `backend/` bao gồm hệ thống Microservices Spring Boot, AI Engine FastAPI, Apache Kafka, Redis và SQL Server.
 
-Thành viên vui lòng kiểm tra README hoặc hướng dẫn bên trong thư mục `backend/` để biết cách cài đặt dependencies, cấu hình môi trường và khởi động server.
+Chi tiết cài đặt xem tại: [`backend/README.md`](backend/README.md).
 
-## 7. Quy tắc làm việc với Git
+## 7. Hướng dẫn Demo tay (Manual Demo Guide)
+
+Hệ thống hỗ trợ kiểm thử và demo hoàn toàn thông qua giao diện trực quan **Swagger UI** (không bắt buộc dùng Terminal):
+
+### 7.1. Danh sách Swagger UI trực tiếp trên Trình duyệt
+
+| Dịch vụ | Cổng | Đường dẫn Swagger UI | Chức năng chính |
+| :--- | :---: | :--- | :--- |
+| **Identity Service** | `8081` | [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) | Cấp Dev Token (Developer, Staff, Manager) |
+| **Integration Service** | `8082` | [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html) | Quản lý kho GitHub thật & Webhook Ingestion |
+| **Document Service** | `8083` | [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html) | Quản lý tài liệu, kiểm tra chuỗi Hash SHA-256 |
+| **Workflow Service** | `8084` | [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html) | Hàng đợi duyệt 2 cấp (Staff -> Manager) |
+| **Notification Service** | `8086` | [http://localhost:8086/swagger-ui.html](http://localhost:8086/swagger-ui.html) | Nhận thông báo In-App qua Kafka broker |
+
+### 7.2. Các kịch bản Demo nhanh
+
+1. **Quy trình Quản lý Tài liệu & Phê duyệt 2 cấp**:
+   * **Bước 1**: Lấy token tại `POST /api/v1/auth/dev-token` (cổng `8081`).
+   * **Bước 2**: Nhấn nút xanh **Authorize** (hình ổ khóa 🔓) trên các cổng Swagger dán token vào.
+   * **Bước 3**: Tạo tài liệu tại `POST /api/v1/documents` (cổng `8083`).
+   * **Bước 4**: Nộp duyệt tại `POST /api/v1/documents/{id}/submit` (cổng `8084`).
+   * **Bước 5**: Duyệt 2 cấp Staff $\rightarrow$ Manager tại `POST /api/v1/reviews/{id}/decisions` (cổng `8084`). Tài liệu đạt trạng thái `PUBLISHED`.
+   * **Bước 6**: Xem thông báo đẩy qua Kafka tại `GET /api/v1/notifications` (cổng `8086`).
+
+2. **Tích hợp GitHub thật (silasWorkSpace/HQTCSDL_UTH)**:
+   * Xem kho GitHub thật đã liên kết tại `GET /api/v1/repositories` (cổng `8082`).
+   * Xem các sự kiện commit/push từ Webhook tại `GET /api/v1/repositories/{id}/events`.
+
+3. **Chạy kịch bản tự động bằng một dòng lệnh**:
+   * `cd backend; .\test-flow.ps1` (Luồng phê duyệt tài liệu)
+   * `cd backend; .\test-github-demo.ps1` (Luồng tích hợp GitHub & AST Analyzer)
+
+Chi tiết từng bước kèm JSON mẫu xem tại: [`backend/README.md`](backend/README.md).
+
+## 8. Quy tắc làm việc với Git
 
 Để tránh xung đột mã nguồn, thành viên nên tạo nhánh riêng cho từng tính năng hoặc nhiệm vụ.
 
