@@ -1,0 +1,8 @@
+# Chi dung khi chay may dev (profile dev). KHONG dung cac gia tri mac dinh nay o moi truong that.
+spring:
+  datasource:
+    password: ${DB_PASSWORD:Living_Docs_2026!}
+
+livingdocs:
+  security:
+    jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
