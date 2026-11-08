@@ -55,15 +55,20 @@ public class DevTokenController {
                         "Vai trò phải là một trong: " + String.join(", ", Roles.ALL));
             }
         }
-        if (!workspaces.isActive(request.tenant())) {
+        String tenant = request.tenant().trim();
+        if (tenant.startsWith("ws_")) {
+            tenant = tenant.substring(3);
+        }
+        if (!workspaces.isActive(tenant)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy workspace", "Workspace không tồn tại.");
         }
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-        UUID userId = TenantContext.runWith(request.tenant(),
+        final String effectiveTenant = tenant;
+        UUID userId = TenantContext.runWith(effectiveTenant,
                 () -> users.findByEmail(email).map(UserRecord::id).orElseGet(UUID::randomUUID));
         LOG.warn("DEV-TOKEN: cap token khong can mat khau cho {} ({}) o tenant {}", email, request.roles(),
-                request.tenant());
-        String access = tokens.issueAccessToken(userId, request.tenant(), email, List.copyOf(request.roles()));
+                effectiveTenant);
+        String access = tokens.issueAccessToken(userId, effectiveTenant, email, List.copyOf(request.roles()));
         return new TokenResponse(access, null, "Bearer", security.accessTokenTtl().toSeconds());
     }
 }

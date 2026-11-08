@@ -13,8 +13,10 @@ public class WorkspaceRepository {
     }
 
     public boolean isActive(String code) {
-        Integer n = db.platform("SELECT COUNT(*) FROM platform.workspace WHERE code = :code AND status = 'active'")
-                .param("code", code)
+        String cleanCode = (code != null && code.startsWith("ws_")) ? code.substring(3) : code;
+        Integer n = db.platform("SELECT COUNT(*) FROM platform.workspace WHERE (code = :code OR schema_name = :rawCode) AND status = 'active'")
+                .param("code", cleanCode)
+                .param("rawCode", code)
                 .query(Integer.class)
                 .single();
         return n != null && n > 0;
