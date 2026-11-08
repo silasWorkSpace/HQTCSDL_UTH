@@ -21,6 +21,19 @@ public class DocumentController {
         this.documentService = documentService;
     }
 
+    @PostMapping
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<DocumentResponse> createDocument(@Valid @RequestBody CreateDocumentRequest req) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(documentService.createDocument(req));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<Void> deleteDocument(@PathVariable("id") UUID id) {
+        documentService.deleteDocument(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
     public ResponseEntity<List<DocumentResponse>> listDocuments(

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.difflib.DiffUtils;
 import com.github.difflib.patch.AbstractDelta;
 import com.github.difflib.patch.Patch;
+import com.livingdocs.common.error.ApiException;
 import com.livingdocs.common.events.DocDraftPayload;
 import com.livingdocs.common.events.EventEnvelope;
 import com.livingdocs.common.events.GenerateDocPayload;
@@ -12,6 +13,7 @@ import com.livingdocs.common.security.TenantContext;
 import com.livingdocs.document.dto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,69 @@ public class DocumentService {
         this.jdbcTemplate = jdbcTemplate;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+    }
+
+    @Transactional
+    public DocumentResponse createDocument(CreateDocumentRequest req) {
+        String schema = TenantContext.getSchema();
+        String actorRole = "Developer";
+        UUID actorUserId = null;
+        try {
+            actorRole = SecurityUtils.getCurrentUserRole();
+            actorUserId = SecurityUtils.getCurrentUserId();
+        } catch (Exception ignored) {}
+
+        String callSql = String.format(
+            "{CALL [%s].[sp_create_document](?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}",
+            schema
+        );
+
+        final String finalActorRole = actorRole != null ? actorRole : "Developer";
+        final UUID finalActorUserId = actorUserId;
+
+        UUID createdDocId = jdbcTemplate.execute((java.sql.Connection conn) -> {
+            try (CallableStatement cs = conn.prepareCall(callSql)) {
+                cs.setObject(1, req.repositoryId());
+                cs.setString(2, req.docType());
+                cs.setString(3, req.title());
+                cs.setString(4, req.pathInRepo());
+                cs.setObject(5, finalActorUserId != null ? finalActorUserId : UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                cs.setString(6, req.content());
+                cs.setString(7, finalActorRole);
+                cs.setObject(8, finalActorUserId);
+                cs.setString(9, "MANUAL_EDIT");
+                cs.setString(10, "DRAFT");
+                cs.setObject(11, req.templateId());
+                cs.setObject(12, req.collectionId());
+                cs.setString(13, null);
+                cs.setNull(14, Types.INTEGER);
+                cs.setString(15, null);
+                cs.setBoolean(16, true);
+                cs.registerOutParameter(17, Types.CHAR);
+                cs.registerOutParameter(18, Types.CHAR);
+
+                cs.execute();
+
+                String docIdStr = cs.getString(17);
+                return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
+            }
+        });
+
+        if (createdDocId == null) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể tạo tài liệu", "Lỗi tạo tài liệu từ cơ sở dữ liệu.");
+        }
+
+        return getDocumentById(createdDocId);
+    }
+
+    @Transactional
+    public void deleteDocument(UUID id) {
+        String schema = TenantContext.getSchema();
+        String updateSql = String.format("UPDATE [%s].[document] SET doc_status = 'ARCHIVED', updated_at = SYSUTCDATETIME() WHERE id = ?", schema);
+        int rows = jdbcTemplate.update(updateSql, id);
+        if (rows == 0) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài liệu", "Tài liệu không tồn tại để xóa.");
+        }
     }
 
     public List<DocumentResponse> listDocuments(UUID repositoryId, String docStatus, int page, int size) {
@@ -405,7 +470,8 @@ public class DocumentService {
     private DocumentResponse mapDocumentResponse(ResultSet rs) throws java.sql.SQLException {
         DocumentResponse res = new DocumentResponse();
         res.setId(UUID.fromString(rs.getString("id")));
-        res.setRepositoryId(UUID.fromString(rs.getString("repository_id")));
+        String repoId = rs.getString("repository_id");
+        if (repoId != null) res.setRepositoryId(UUID.fromString(repoId));
         res.setDocType(rs.getString("doc_type"));
         String tplId = rs.getString("template_id");
         if (tplId != null) res.setTemplateId(UUID.fromString(tplId));
