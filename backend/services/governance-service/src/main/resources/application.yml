@@ -12,7 +12,7 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!}
+    secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
 
 management:
   endpoints:

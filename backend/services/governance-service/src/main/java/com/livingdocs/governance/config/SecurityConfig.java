@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${app.jwt.secret:LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!}")
+    @Value("${app.jwt.secret:${livingdocs.security.jwt-secret:${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}}}")
     private String jwtSecret;
 
     @Bean

@@ -19,10 +19,11 @@ import java.util.UUID;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String DEFAULT_SECRET = "dev-only-secret-change-me-dev-only-secret-change-me";
     private final String jwtSecret;
 
     public JwtAuthenticationFilter(String jwtSecret) {
-        this.jwtSecret = jwtSecret != null ? jwtSecret : "LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!";
+        this.jwtSecret = (jwtSecret != null && !jwtSecret.isBlank()) ? jwtSecret : DEFAULT_SECRET;
     }
 
     @Override
@@ -30,13 +31,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
         String tenantHeader = request.getHeader("X-Tenant-Id");
+        if (tenantHeader == null || tenantHeader.isBlank()) {
+            tenantHeader = request.getHeader("X-Tenant");
+        }
 
         if (tenantHeader != null && !tenantHeader.isBlank()) {
             TenantContext.setTenant(tenantHeader.trim());
         }
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(7).trim();
             try {
                 Claims claims = Jwts.parser()
                         .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
@@ -46,18 +50,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 String userIdStr = claims.getSubject();
                 UUID userId = userIdStr != null ? UUID.fromString(userIdStr) : UUID.fromString("00000000-0000-0000-0000-000000000001");
-                String role = claims.get("role", String.class);
-                if (role == null) role = "Developer";
+
                 String tenant = claims.get("tenant", String.class);
                 if (tenant != null && !tenant.isBlank()) {
                     TenantContext.setTenant(tenant);
                 }
 
-                AuthenticatedUser authUser = new AuthenticatedUser(userId, claims.get("email", String.class), role, TenantContext.getTenant());
+                java.util.List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                Object rolesObj = claims.get("roles");
+                String primaryRole = null;
+                if (rolesObj instanceof java.util.List<?> list) {
+                    for (Object r : list) {
+                        if (r != null) {
+                            String roleStr = r.toString().trim();
+                            if (primaryRole == null) primaryRole = roleStr;
+                            authorities.add(new SimpleGrantedAuthority("ROLE_" + roleStr));
+                            authorities.add(new SimpleGrantedAuthority(roleStr));
+                        }
+                    }
+                }
+                Object singleRole = claims.get("role");
+                if (singleRole != null) {
+                    String roleStr = singleRole.toString().trim();
+                    if (primaryRole == null) primaryRole = roleStr;
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + roleStr));
+                    authorities.add(new SimpleGrantedAuthority(roleStr));
+                }
+
+                if (authorities.isEmpty()) {
+                    primaryRole = "Developer";
+                    authorities.add(new SimpleGrantedAuthority("ROLE_Developer"));
+                    authorities.add(new SimpleGrantedAuthority("Developer"));
+                }
+
+                AuthenticatedUser authUser = new AuthenticatedUser(userId, claims.get("email", String.class), primaryRole, TenantContext.getTenant());
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         authUser,
                         null,
-                        Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                        authorities
                 );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (Exception ex) {
