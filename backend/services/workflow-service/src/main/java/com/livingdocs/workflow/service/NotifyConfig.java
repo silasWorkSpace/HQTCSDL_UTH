@@ -13,6 +13,13 @@ public class NotifyConfig {
 
     @Bean
     @ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true")
+    public com.livingdocs.common.events.EventPublisher eventPublisher(
+            org.springframework.kafka.core.KafkaTemplate<String, String> kafkaTemplate) {
+        return new com.livingdocs.common.events.EventPublisher(kafkaTemplate);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true")
     public NotifyPort kafkaNotifyPort(com.livingdocs.common.events.EventPublisher publisher) {
         return new KafkaNotifyPort(publisher);
     }

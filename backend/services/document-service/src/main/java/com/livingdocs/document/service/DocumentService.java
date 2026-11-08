@@ -69,7 +69,7 @@ public class DocumentService {
                 : "untitled";
             if (sanitized.startsWith("-")) sanitized = sanitized.substring(1);
             if (sanitized.endsWith("-")) sanitized = sanitized.substring(0, sanitized.length() - 1);
-            pathInRepo = "docs/" + (sanitized.isBlank() ? "untitled" : sanitized) + ".md";
+            pathInRepo = "docs/" + (sanitized.isBlank() ? "untitled" : sanitized) + "-" + UUID.randomUUID().toString().substring(0, 8) + ".md";
         }
 
         // Resolve ownerId & actorUserId: ensure user actually exists in app_user table

@@ -43,4 +43,12 @@ public class GlobalExceptionHandler {
         problem.setTitle("Không đủ quyền");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
     }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ProblemDetail> handleNotReadable(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "JSON gửi lên không đúng định dạng hoặc lỗi mã hóa ký tự UTF-8.");
+        problem.setTitle("JSON không hợp lệ");
+        return ResponseEntity.badRequest().body(problem);
+    }
 }

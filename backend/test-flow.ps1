@@ -19,7 +19,15 @@ function Get-DevToken($email, $roles) {
         email  = $email
         roles  = $roles
     } | ConvertTo-Json
-    return (Invoke-RestMethod -Uri "http://localhost:8081/api/v1/auth/dev-token" -Method Post -Body $body -ContentType "application/json").accessToken
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+    $res = Invoke-RestMethod -Uri "http://localhost:8081/api/v1/auth/dev-token" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8"
+    return $res.accessToken
+}
+
+function Invoke-JsonPost($uri, $bodyObj, $headers) {
+    $json = $bodyObj | ConvertTo-Json
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    return Invoke-RestMethod -Uri $uri -Method Post -Body $bytes -Headers $headers -ContentType "application/json; charset=utf-8"
 }
 
 try {
@@ -53,9 +61,9 @@ $docBody = @{
     title   = "Tài liệu Hướng dẫn Thanh toán API v1.0"
     docType = "API_REFERENCE"
     content = "# Hướng Dẫn Thanh Toán`nAPI v1.0 cung cấp các cổng thanh toán an toàn."
-} | ConvertTo-Json
+}
 
-$createdDoc = Invoke-RestMethod -Uri "http://localhost:8083/api/v1/documents" -Method Post -Body $docBody -Headers $devHeaders -ContentType "application/json"
+$createdDoc = Invoke-JsonPost "http://localhost:8083/api/v1/documents" $docBody $devHeaders
 $DOC_ID = $createdDoc.documentId
 Write-Host ">> [OK] Tài liệu đã được tạo thành công!" -ForegroundColor Green
 Write-Host "   - Document ID: $DOC_ID" -ForegroundColor Gray
@@ -90,8 +98,8 @@ Write-Host "   [5a] Staff kiểm tra và duyệt sơ bộ..." -ForegroundColor G
 $staffDecisionBody = @{
     decision = "APPROVE"
     reason   = "Nội dung chuẩn định dạng kỹ thuật, chuyển tiếp Manager."
-} | ConvertTo-Json
-$staffDecisionRes = Invoke-RestMethod -Uri "http://localhost:8084/api/v1/reviews/$STAFF_TASK_ID/decisions" -Method Post -Body $staffDecisionBody -Headers $staffHeaders -ContentType "application/json"
+}
+$staffDecisionRes = Invoke-JsonPost "http://localhost:8084/api/v1/reviews/$STAFF_TASK_ID/decisions" $staffDecisionBody $staffHeaders
 $MGR_TASK_ID = $staffDecisionRes.id
 Write-Host ">> [OK] Staff đã duyệt sơ bộ! Chuyển tiếp lên cấp Manager (Task ID: $MGR_TASK_ID)" -ForegroundColor Green
 
@@ -100,8 +108,8 @@ Write-Host "   [5b] Manager phê duyệt ban hành tài liệu..." -ForegroundCo
 $mgrDecisionBody = @{
     decision = "APPROVE"
     reason   = "Tài liệu đạt chuẩn chất lượng xuất bản, duyệt ban hành."
-} | ConvertTo-Json
-$mgrDecisionRes = Invoke-RestMethod -Uri "http://localhost:8084/api/v1/reviews/$MGR_TASK_ID/decisions" -Method Post -Body $mgrDecisionBody -Headers $mgrHeaders -ContentType "application/json"
+}
+$mgrDecisionRes = Invoke-JsonPost "http://localhost:8084/api/v1/reviews/$MGR_TASK_ID/decisions" $mgrDecisionBody $mgrHeaders
 Write-Host ">> [OK] Manager đã phê duyệt thành công!" -ForegroundColor Green
 Write-Host "   - Trạng thái cuối: APPROVED & PUBLISHED" -ForegroundColor Gray
 Write-Host "   - Đã phát sự kiện Kafka (DOC_PUBLISHED) sang Notification Service!" -ForegroundColor Magenta

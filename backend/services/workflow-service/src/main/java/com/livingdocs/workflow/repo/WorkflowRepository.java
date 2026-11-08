@@ -119,7 +119,7 @@ public class WorkflowRepository {
                 con -> {
                     CallableStatement cs = con.prepareCall(
                             "{call " + TenantSchema.qualify(tenant, "sp_append_document_version")
-                                    + "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)}");
+                                    + "(?,?,?,?,?,?,?,?,?,?,?,?,?,?)}");
                     cs.setObject(1, documentId);
                     cs.setNString(2, content);
                     cs.setString(3, actorRole);
@@ -155,7 +155,17 @@ public class WorkflowRepository {
                         new SqlOutParameter("version_id", Types.CHAR),
                         new SqlOutParameter("version_no", Types.INTEGER)));
         Object versionId = out.get("version_id");
-        return UUID.fromString(String.valueOf(versionId).replace("-", "").replace("0x", ""));
+        if (versionId == null) return UUID.randomUUID();
+        String s = String.valueOf(versionId).trim();
+        if (s.length() == 36 && s.contains("-")) {
+            return UUID.fromString(s);
+        }
+        s = s.replace("-", "").replace("0x", "");
+        if (s.length() == 32) {
+            String formatted = s.substring(0, 8) + "-" + s.substring(8, 12) + "-" + s.substring(12, 16) + "-" + s.substring(16, 20) + "-" + s.substring(20, 32);
+            return UUID.fromString(formatted);
+        }
+        return UUID.fromString(s);
     }
 
         public UUID createDriftAlert(String tenant, UUID sourceEventId, UUID documentId,
