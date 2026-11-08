@@ -73,19 +73,29 @@ GO
    Cần Full-Text Search đã cài trên instance (Docker: gói mssql-server-fts).
    LANGUAGE 0 = neutral vì SQL Server không có word breaker tiếng Việt.
    Full-Text chỉ index từng bảng nên có hai index: tiêu đề (document), nội dung (document_version).
-   Dòng version bị che (content = NULL) tự rời khỏi index nhờ CHANGE_TRACKING AUTO. */
+   Dòng version bị che (content = NULL) tự rời khỏi index nhờ CHANGE_TRACKING AUTO.
+   Dùng dynamic SQL để tránh lỗi compile-time Msg 7609 khi instance chưa cài FTS. */
 IF SERVERPROPERTY('IsFullTextInstalled') = 1
 BEGIN
+    DECLARE @sqlFts NVARCHAR(MAX);
+
     IF NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'ft_$(SchemaName)')
-        CREATE FULLTEXT CATALOG [ft_$(SchemaName)];
+    BEGIN
+        SET @sqlFts = N'CREATE FULLTEXT CATALOG [ft_$(SchemaName)];';
+        EXEC sp_executesql @sqlFts;
+    END
 
     IF NOT EXISTS (SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'[$(SchemaName)].[document]'))
-        CREATE FULLTEXT INDEX ON [$(SchemaName)].[document] (title LANGUAGE 0)
-            KEY INDEX pk_document ON [ft_$(SchemaName)] WITH CHANGE_TRACKING AUTO;
+    BEGIN
+        SET @sqlFts = N'CREATE FULLTEXT INDEX ON [$(SchemaName)].[document] (title LANGUAGE 0) KEY INDEX pk_document ON [ft_$(SchemaName)] WITH CHANGE_TRACKING AUTO;';
+        EXEC sp_executesql @sqlFts;
+    END
 
     IF NOT EXISTS (SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'[$(SchemaName)].[document_version]'))
-        CREATE FULLTEXT INDEX ON [$(SchemaName)].[document_version] (content LANGUAGE 0)
-            KEY INDEX pk_document_version ON [ft_$(SchemaName)] WITH CHANGE_TRACKING AUTO;
+    BEGIN
+        SET @sqlFts = N'CREATE FULLTEXT INDEX ON [$(SchemaName)].[document_version] (content LANGUAGE 0) KEY INDEX pk_document_version ON [ft_$(SchemaName)] WITH CHANGE_TRACKING AUTO;';
+        EXEC sp_executesql @sqlFts;
+    END
 END
 ELSE
     PRINT N'CANH BAO: Full-Text Search chua duoc cai tren instance nay, bo qua Full-Text Index.';
