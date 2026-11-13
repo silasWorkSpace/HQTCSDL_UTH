@@ -88,6 +88,120 @@ services:
       redis:
         condition: service_healthy
 
+  integration-service:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: services/integration-service/Dockerfile
+    container_name: livingdocs-integration
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ${MSSQL_SA_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    ports:
+      - "8082:8082"
+    depends_on:
+      mssql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  document-service:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: services/document-service/Dockerfile
+    container_name: livingdocs-document
+    environment:
+      DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      KAFKA_SERVERS: kafka:19092
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+    ports:
+      - "8083:8083"
+    depends_on:
+      mssql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  workflow-service:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: services/workflow-service/Dockerfile
+    container_name: livingdocs-workflow
+    environment:
+      DB_HOST: mssql
+      DB_PORT: 1433
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      KAFKA_BOOTSTRAP: kafka:19092
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+    ports:
+      - "8084:8084"
+    depends_on:
+      mssql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  governance-service:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: services/governance-service/Dockerfile
+    container_name: livingdocs-governance
+    environment:
+      DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+    ports:
+      - "8085:8085"
+    depends_on:
+      mssql:
+        condition: service_healthy
+
+  notification-service:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: services/notification-service/Dockerfile
+    container_name: livingdocs-notification
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ${MSSQL_SA_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+    ports:
+      - "8086:8086"
+    depends_on:
+      mssql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  ai-engine:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: ai-engine/Dockerfile
+    container_name: livingdocs-ai-engine
+    environment:
+      PORT: 8090
+      LLM_PROVIDER: mock
+      LLM_MODEL: mock-model-v1
+    ports:
+      - "8090:8090"
+
 volumes:
   mssql_data:
   kafka_data:

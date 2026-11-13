@@ -5,24 +5,16 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
-        <relativePath/>
+        <groupId>com.livingdocs</groupId>
+        <artifactId>livingdocs-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.livingdocs</groupId>
     <artifactId>integration-service</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
     <name>integration-service</name>
     <description>LivingDocs GitHub Integration and Webhook Ingestion Service</description>
-
-    <properties>
-        <java.version>21</java.version>
-        <springdoc.version>2.6.0</springdoc.version>
-        <bouncycastle.version>1.78.1</bouncycastle.version>
-        <jjwt.version>0.12.6</jjwt.version>
-    </properties>
 
     <dependencies>
         <!-- Spring Boot Web & Validation -->
@@ -66,30 +58,25 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- Security & Cryptography (BouncyCastle & JJWT for GitHub App RS256 JWT) -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
-            <version>${bouncycastle.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>${jjwt.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
 

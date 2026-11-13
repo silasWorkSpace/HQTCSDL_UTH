@@ -23,6 +23,7 @@
         <mssql-jdbc.version>12.6.1.jre11</mssql-jdbc.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.5.0</springdoc.version>
+        <bouncycastle.version>1.78.1</bouncycastle.version>
     </properties>
 
     <modules>
@@ -30,6 +31,7 @@
         <module>libs/common-security</module>
         <module>libs/common-web</module>
         <module>services/identity-service</module>
+        <module>services/integration-service</module>
         <module>services/document-service</module>
         <module>services/governance-service</module>
         <module>services/workflow-service</module>
@@ -86,6 +88,16 @@
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.livingdocs</groupId>
+                <artifactId>integration-service</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

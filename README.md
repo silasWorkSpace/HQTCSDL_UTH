@@ -66,6 +66,7 @@ Hệ thống hỗ trợ kiểm thử và demo hoàn toàn thông qua giao diện
 | **Integration Service** | `8082` | [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html) | Quản lý kho GitHub thật & Webhook Ingestion |
 | **Document Service** | `8083` | [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html) | Quản lý tài liệu, kiểm tra chuỗi Hash SHA-256 |
 | **Workflow Service** | `8084` | [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html) | Hàng đợi duyệt 2 cấp (Staff -> Manager) |
+| **Governance Service** | `8085` | [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html) | Quản lý biểu mẫu tài liệu (Templates) & Bộ sưu tập |
 | **Notification Service** | `8086` | [http://localhost:8086/swagger-ui.html](http://localhost:8086/swagger-ui.html) | Nhận thông báo In-App qua Kafka broker |
 
 ### 7.2. Các kịch bản Demo nhanh

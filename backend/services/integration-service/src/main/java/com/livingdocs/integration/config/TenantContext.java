@@ -2,36 +2,48 @@ package com.livingdocs.integration.config;
 
 /**
  * Quản lý ngữ cảnh đa người thuê (Multi-tenant context).
- * Mặc định chuyển mã tenant thành tên schema: demo -> ws_demo.
+ * Chuẩn hóa mã tenant ("demo" hoặc "ws_demo") thành tên schema chuẩn "ws_demo"
+ * Ngăn chặn lỗi lặp tiền tố sinh ra schema không hợp lệ "ws_ws_demo".
  */
 public final class TenantContext {
 
     private static final String DEFAULT_TENANT = "demo";
+    private static final String PREFIX = "ws_";
     private static final ThreadLocal<String> CURRENT_TENANT = ThreadLocal.withInitial(() -> DEFAULT_TENANT);
 
     private TenantContext() {
     }
 
-    public static String getTenant() {
-        return CURRENT_TENANT.get();
+    /**
+     * Chuẩn hóa mã tenant về dạng không có tiền tố ws_ (ví dụ: "ws_demo" -> "demo").
+     */
+    public static String normalizeTenant(String tenant) {
+        if (tenant == null || tenant.isBlank()) {
+            return DEFAULT_TENANT;
+        }
+        String clean = tenant.trim().toLowerCase().replaceAll("[^a-z0-9_]", "");
+        if (clean.startsWith(PREFIX)) {
+            clean = clean.substring(PREFIX.length());
+        }
+        return clean.isBlank() ? DEFAULT_TENANT : clean;
     }
 
+    /**
+     * Mã tenant chuẩn (ví dụ: "demo").
+     */
+    public static String getTenant() {
+        return normalizeTenant(CURRENT_TENANT.get());
+    }
+
+    /**
+     * Tên schema SQL Server chuẩn (ví dụ: "ws_demo").
+     */
     public static String getSchemaName() {
-        String tenant = getTenant();
-        if (tenant == null || tenant.isBlank()) {
-            tenant = DEFAULT_TENANT;
-        }
-        // Chuẩn hóa tên schema an toàn
-        String clean = tenant.trim().toLowerCase().replaceAll("[^a-z0-9_]", "");
-        return "ws_" + clean;
+        return PREFIX + getTenant();
     }
 
     public static void setTenant(String tenant) {
-        if (tenant != null && !tenant.isBlank()) {
-            CURRENT_TENANT.set(tenant.trim().toLowerCase());
-        } else {
-            CURRENT_TENANT.set(DEFAULT_TENANT);
-        }
+        CURRENT_TENANT.set(normalizeTenant(tenant));
     }
 
     public static void clear() {

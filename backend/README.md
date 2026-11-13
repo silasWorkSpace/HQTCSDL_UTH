@@ -27,6 +27,7 @@ backend/
 | **Integration Service** | `8082` | [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html) |
 | **Document Service** | `8083` | [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html) |
 | **Workflow Service** | `8084` | [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html) |
+| **Governance Service** | `8085` | [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html) |
 | **Notification Service** | `8086` | [http://localhost:8086/swagger-ui.html](http://localhost:8086/swagger-ui.html) |
 
 ---
@@ -150,14 +151,12 @@ cd backend\infra
 .\db.ps1 rebuild
 .\kafka-topics.ps1
 
-# 2. Khởi chạy từng service
+# 2. Khởi chạy từng service (tất cả đều chạy trực tiếp từ thư mục backend)
 cd backend
 .\mvnw.cmd -pl services/identity-service spring-boot:run "-Dspring-boot.run.profiles=dev"
+.\mvnw.cmd -pl services/integration-service spring-boot:run "-Dspring-boot.run.profiles=dev"
 .\mvnw.cmd -pl services/document-service spring-boot:run "-Dspring-boot.run.profiles=dev"
 .\mvnw.cmd -pl services/workflow-service spring-boot:run "-Dspring-boot.run.profiles=dev"
+.\mvnw.cmd -pl services/governance-service spring-boot:run "-Dspring-boot.run.profiles=dev"
 .\mvnw.cmd -pl services/notification-service spring-boot:run "-Dspring-boot.run.profiles=dev"
-
-# Integration Service (Port 8082):
-cd backend\services\integration-service
-..\..\mvnw.cmd spring-boot:run
 ```
