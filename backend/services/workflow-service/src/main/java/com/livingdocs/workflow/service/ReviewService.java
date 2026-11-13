@@ -106,6 +106,8 @@ public class ReviewService {
                 .ifPresent(v -> result.put("lastApprovedVersion", v));
         // Quyết định và comment đã có trong task này
         result.put("decisions", repo.listDecisions(tenant, taskId));
+        // Comment theo mục (FR-WF-07) — để màn hình duyệt hiển thị lại
+        result.put("comments", repo.listComments(tenant, taskId));
         return result;
     }
 

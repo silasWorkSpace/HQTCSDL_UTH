@@ -88,6 +88,22 @@ class DriftServiceTest {
     }
 
     @Test
+    void duplicateAlertDoesNotCreateSuggestionAgain() throws Exception {
+        when(repo.listDriftAlerts(anyString(), eq(docId))).thenReturn(List.of(
+                Map.of("source_event_id", sourceEventId, "drift_type", "Referential")));
+        String payload = """
+                {"documentId":"%s","sourceEventId":"%s",
+                 "findings":[{"driftType":"Referential","severity":"High","evidence":{},
+                   "suggestion":{"content":"Cap nhat tham chieu","confidence":0.85}}]}
+                """.formatted(docId, sourceEventId);
+
+        driftService.onDriftFound("acme", MAPPER.readTree(payload));
+
+        verify(repo, never()).createUpdateSuggestion(anyString(), any(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
     void acceptPutsSuggestionIntoReviewFlow() {
         login();
         when(repo.findSuggestion(anyString(), eq(suggestionId))).thenReturn(Optional.of(
@@ -99,7 +115,21 @@ class DriftServiceTest {
         verify(repo).appendDocumentVersion(eq("acme"), eq(docId), eq("Gợi ý nội dung"),
                 eq("Developer"), eq(devId), eq("DRIFT_SUGGESTION"), anyString());
         verify(repo).updateSuggestionStatus("acme", suggestionId, "Accepted", null);
+        verify(repo).updateDriftAlertStatusBySuggestion("acme", suggestionId, "Accepted");
         verify(reviewService).submit(eq("acme"), eq(docId), any());
+    }
+
+    @Test
+    void dismissWithReasonMarksAlertDismissed() {
+        login();
+        when(repo.findSuggestion(anyString(), eq(suggestionId))).thenReturn(Optional.of(
+                new WorkflowRepository.SuggestionRow(suggestionId, docId, "nội dung",
+                        "Pending Developer Action", "drift")));
+
+        driftService.handleSuggestion("acme", suggestionId, "dismiss", null, "Gợi ý sai");
+
+        verify(repo).updateSuggestionStatus("acme", suggestionId, "Dismissed", "Gợi ý sai");
+        verify(repo).updateDriftAlertStatusBySuggestion("acme", suggestionId, "Dismissed");
     }
 
     @Test

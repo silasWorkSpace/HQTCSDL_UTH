@@ -259,16 +259,39 @@ public class WorkflowRepository {
                 taskId, reviewerId, decision, reason);
     }
 
-    public record DecisionRow(UUID reviewerId, String decision, OffsetDateTime decidedAt) {
+    /** Quyết định duyệt kèm lý do và tên người duyệt (audit trail FR-WF-20). */
+    public record DecisionRow(UUID reviewerId, String reviewerName, String decision, String reason,
+                              OffsetDateTime decidedAt) {
+        public DecisionRow(UUID reviewerId, String decision, OffsetDateTime decidedAt) {
+            this(reviewerId, null, decision, null, decidedAt);
+        }
+    }
+
+    /** Comment theo mục của một review task (FR-WF-07). */
+    public record CommentRow(UUID userId, String userName, String content, Integer lineNumber,
+                             OffsetDateTime createdAt) {
     }
 
     /** Lấy quyết định của bước Staff — dùng chặn Manager đã duyệt Staff (FR-WF-22). */
     public List<DecisionRow> listDecisions(String tenant, UUID taskId) {
-        return jdbc.query("SELECT reviewer_id, decision, decided_at FROM "
-                        + TenantSchema.qualify(tenant, "review_decision")
-                        + " WHERE review_task_id = ? ORDER BY decided_at",
+        return jdbc.query("SELECT d.reviewer_id, u.display_name, d.decision, d.reason, d.decided_at FROM "
+                        + TenantSchema.qualify(tenant, "review_decision") + " d LEFT JOIN "
+                        + TenantSchema.qualify(tenant, "app_user") + " u ON u.id = d.reviewer_id"
+                        + " WHERE d.review_task_id = ? ORDER BY d.decided_at",
                 (rs, i) -> new DecisionRow(rs.getObject("reviewer_id", UUID.class),
-                        rs.getString("decision"), odt(rs, "decided_at")),
+                        rs.getString("display_name"), rs.getString("decision"),
+                        rs.getString("reason"), odt(rs, "decided_at")),
+                taskId);
+    }
+
+    public List<CommentRow> listComments(String tenant, UUID taskId) {
+        return jdbc.query("SELECT c.user_id, u.display_name, c.content, c.line_number, c.created_at FROM "
+                        + TenantSchema.qualify(tenant, "review_comment") + " c LEFT JOIN "
+                        + TenantSchema.qualify(tenant, "app_user") + " u ON u.id = c.user_id"
+                        + " WHERE c.review_task_id = ? ORDER BY c.created_at",
+                (rs, i) -> new CommentRow(rs.getObject("user_id", UUID.class),
+                        rs.getString("display_name"), rs.getString("content"),
+                        (Integer) rs.getObject("line_number"), odt(rs, "created_at")),
                 taskId);
     }
 
@@ -330,6 +353,17 @@ public class WorkflowRepository {
         return jdbc.update("UPDATE " + TenantSchema.qualify(tenant, "update_suggestion")
                 + " SET status = ?, dismiss_reason = ?, updated_at = SYSUTCDATETIME() "
                 + "WHERE id = ?", status, dismissReason, suggestionId);
+    }
+
+    /**
+     * Cập nhật trạng thái xử lý của drift_alert mà gợi ý này sinh ra (DR-12: lịch sử drift).
+     * Gợi ý không gắn alert (drift_alert_id rỗng) thì không có gì để cập nhật.
+     */
+    public int updateDriftAlertStatusBySuggestion(String tenant, UUID suggestionId, String handlingStatus) {
+        return jdbc.update("UPDATE a SET a.handling_status = ? FROM "
+                + TenantSchema.qualify(tenant, "drift_alert") + " a JOIN "
+                + TenantSchema.qualify(tenant, "update_suggestion") + " s ON s.drift_alert_id = a.id "
+                + "WHERE s.id = ?", handlingStatus, suggestionId);
     }
 
     /** Còn gợi ý nào khác đang chờ Developer xử lý cho tài liệu này không. */

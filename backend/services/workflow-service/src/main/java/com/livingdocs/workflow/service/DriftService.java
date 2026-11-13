@@ -80,6 +80,7 @@ public class DriftService {
                         severity, evidence, "Open");
             } else {
                 log.info("Drift alert trung lap bo qua: doc={} type={}", documentId, driftType);
+                continue; // chạy lại cùng source_event: không sinh thêm gợi ý (FR-DR-13)
             }
 
             JsonNode suggestion = finding.path("suggestion");
@@ -148,6 +149,7 @@ public class DriftService {
                         user.userId(), "DRIFT_SUGGESTION",
                         "Accept gợi ý cập nhật từ drift (AUTO-08)");
                 repo.updateSuggestionStatus(tenant, suggestionId, "Accepted", null);
+                repo.updateDriftAlertStatusBySuggestion(tenant, suggestionId, "Accepted");
                 audit.record(tenant, user.userId(), "Developer",
                         ("edit".equals(action) ? "SUGGESTION_EDIT" : "SUGGESTION_ACCEPT"),
                         "update_suggestion", suggestionId, null, null);
@@ -166,6 +168,7 @@ public class DriftService {
                             "Dismiss bắt buộc ghi lý do");
                 }
                 repo.updateSuggestionStatus(tenant, suggestionId, "Dismissed", dismissReason);
+                repo.updateDriftAlertStatusBySuggestion(tenant, suggestionId, "Dismissed");
                 audit.record(tenant, user.userId(), "Developer", "SUGGESTION_DISMISS",
                         "update_suggestion", suggestionId, null,
                         "{\"reason\":\"" + dismissReason.replace("\"", "'") + "\"}");
