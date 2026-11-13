@@ -1,0 +1,21 @@
+{
+  "ref": "refs/heads/main",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "c1d2e3f4a5b6c7d8e9f01234567890abcdef1234",
+  "repository": {
+    "id": 12345678,
+    "name": "demo-repo",
+    "full_name": "tester_hieu/demo-repo",
+    "default_branch": "main"
+  },
+  "commits": [
+    {
+      "id": "c1d2e3f4a5b6c7d8e9f01234567890abcdef1234",
+      "message": "fix: Sửa đổi chữ ký method và endpoint",
+      "timestamp": "2026-11-05T18:00:00Z"
+    }
+  ],
+  "sender": {
+    "login": "tester_hieu"
+  }
+}

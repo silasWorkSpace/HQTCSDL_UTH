@@ -1,0 +1,34 @@
+{
+  "action": "opened",
+  "number": 101,
+  "pull_request": {
+    "id": 987654321,
+    "number": 101,
+    "state": "open",
+    "title": "feat: Thêm API đặt hàng mới",
+    "user": {
+      "login": "developer_silas",
+      "id": 556677
+    },
+    "head": {
+      "ref": "feature/order-api",
+      "sha": "a1b2c3d4e5f678901234567890abcdef12345678"
+    },
+    "base": {
+      "ref": "main",
+      "sha": "9999999999999999999999999999999999999999"
+    },
+    "merged": false
+  },
+  "repository": {
+    "id": 12345678,
+    "name": "demo-repo",
+    "full_name": "tester_hieu/demo-repo",
+    "owner": {
+      "login": "tester_hieu"
+    }
+  },
+  "sender": {
+    "login": "developer_silas"
+  }
+}
