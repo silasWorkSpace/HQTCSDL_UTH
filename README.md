@@ -36,31 +36,46 @@ Nếu đã clone repository trước đó, cập nhật mã nguồn mới nhất
 
 `git pull origin main`
 
-## 5. Khởi động TOÀN BỘ Hệ thống với 1 lệnh duy nhất (1-Click Startup)
+## 5. Khởi động & Dừng TOÀN BỘ Hệ thống (1-Click `start-all.ps1` & `stop-all.ps1`)
 
-Thay vì phải mở từng terminal để chạy từng dịch vụ riêng lẻ, bạn chỉ cần mở PowerShell tại thư mục gốc và chạy:
+Thay vì phải mở hàng loạt terminal thủ công để cấu hình và bật từng dịch vụ riêng lẻ, bạn chỉ cần mở PowerShell tại thư mục gốc dự án và sử dụng kịch bản 1-click duy nhất:
+
+### 5.1. Khởi động hệ thống (`start-all.ps1`)
 
 ```powershell
-# Khởi động toàn bộ: SQL Server, Redis, Kafka + 6 Microservices + AI Engine + Frontend Web
+# Chế độ 1: Full Docker Container (Khuyến nghị cho kiểm thử đóng gói & Demo hoàn chỉnh)
+.\start-all.ps1 -Docker
+
+# Chế độ 2: Local Dev (Khuyến nghị cho lập trình & Debug log trực tiếp từng service)
 .\start-all.ps1
 ```
 
-Script sẽ tự động:
-1. Khởi động hạ tầng Docker (SQL Server, Redis, Kafka).
-2. Tự động giải phóng các port bị chiếm dụng (nếu có).
-3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên rõ ràng).
-4. Tự động mở trình duyệt web tại `http://localhost:5173`.
+* **Chế độ Full Docker (`-Docker`)**:
+  1. Tự động kiểm tra và biên dịch siêu tốc các file JAR trên máy host (tận dụng 100% cache `.m2` có sẵn, 0% tải mạng ngoài, không bao giờ bị lỗi SSL handshake).
+  2. Tự động đóng gói và khởi chạy **10 containers** trong Docker (SQL Server, Redis, Kafka, 6 Spring Boot Services, FastAPI AI Engine) trong trạng thái Healthy.
+  3. Tự động khởi chạy Frontend Vite và mở trình duyệt web tại `http://localhost:5173`.
 
-**Tùy chọn:**
-* Chạy hoàn toàn bên trong Docker container: `.\start-all.ps1 -Docker`
-* Chỉ chạy backend và AI (không mở frontend): `.\start-all.ps1 -NoFrontend`
+* **Chế độ Local Dev (Mặc định)**:
+  1. Tự động giải phóng các port nếu đang bị tiến trình cũ chiếm dụng (8081–8086, 8090, 5173).
+  2. Tự động bật cụm hạ tầng Docker (SQL Server, Redis, Kafka).
+  3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên và icon màu rõ ràng) để tiện theo dõi log thời gian thực.
+  4. Tự động mở trình duyệt web tại `http://localhost:5173`.
 
-Khi muốn dừng toàn bộ các service:
+* **Tùy chọn bổ sung:**
+  * Chỉ chạy Backend & AI Engine (không mở Frontend): `.\start-all.ps1 -NoFrontend`
+  * Mở cửa sổ Console riêng biệt thay vì gom Tab: `.\start-all.ps1 -WindowMode windows`
+
+---
+
+### 5.2. Dừng hệ thống (`stop-all.ps1`)
+
+Khi kết thúc phiên làm việc hoặc kiểm thử, bạn có thể dọn dẹp sạch sẽ tài nguyên chỉ với 1 lệnh:
+
 ```powershell
-# Tắt sạch các service đang chạy
+# Dừng toàn bộ các ứng dụng cục bộ (giữ lại container hạ tầng SQL Server, Redis, Kafka)
 .\stop-all.ps1
 
-# Tắt cả các container Docker hạ tầng
+# Dừng SẠCH SẼ toàn bộ (tắt cả ứng dụng lẫn toàn bộ container Docker)
 .\stop-all.ps1 -Docker
 ```
 
@@ -88,7 +103,30 @@ Toàn bộ hệ thống hỗ trợ kiểm thử thủ công qua 2 phương thứ
 1. **Swagger UI & OpenAPI Docs**: Kiểm thử chuyên sâu từng API endpoint của Backend & AI Engine.
 2. **Frontend Web UI**: Trải nghiệm giao diện người dùng thực tế tại `http://localhost:5173`.
 
-### 7.1. Bảng điều khiển & Đường dẫn truy cập trực tiếp
+---
+
+### 7.1. Bước 0: Khởi động hệ sinh thái với `start-all.ps1`
+
+Trước khi bắt đầu bất kỳ kịch bản nào, hãy mở PowerShell tại thư mục gốc và khởi động hệ thống:
+
+```powershell
+# Cách A (Khuyến nghị cho kiểm thử Docker): Khởi chạy 100% dịch vụ trong Docker
+.\start-all.ps1 -Docker
+
+# Cách B (Khuyến nghị cho kiểm thử Local): Mở các Tab Console trực quan
+.\start-all.ps1
+```
+
+* **Xác nhận trạng thái sẵn sàng**:
+  Nếu chạy ở chế độ Docker, bạn có thể kiểm tra nhanh bằng lệnh:
+  ```powershell
+  docker compose -f backend/infra/docker/docker-compose.yml --profile full ps
+  ```
+  Tất cả 10 containers (`mssql`, `redis`, `kafka`, 6 Spring Boot Services, `ai-engine`) phải hiển thị trạng thái `Up` hoặc `Up (healthy)`.
+
+---
+
+### 7.2. Bảng điều khiển & Đường dẫn truy cập trực tiếp
 
 | Thành phần | Cổng (Port) | Đường dẫn trực tiếp | Mục đích kiểm thử |
 | :--- | :---: | :--- | :--- |
@@ -103,7 +141,7 @@ Toàn bộ hệ thống hỗ trợ kiểm thử thủ công qua 2 phương thứ
 
 ---
 
-### 7.2. Chuẩn bị Token Phân quyền (Identity Service - Port 8081)
+### 7.3. Chuẩn bị Token Phân quyền (Identity Service - Port 8081)
 
 Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn JWT và phân quyền vai trò (Role-Based Access Control). Hãy chuẩn bị token trước khi thực hiện các kịch bản:
 
@@ -142,7 +180,7 @@ Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn
 
 ---
 
-### 7.3. Kịch bản Kiểm thử Thủ công Chi tiết
+### 7.4. Kịch bản Kiểm thử Thủ công Chi tiết
 
 #### KỊCH BẢN 1: Quản lý Bản thảo & Kiểm tra Chuỗi Hash SHA-256 (Document Service - Port 8083)
 
@@ -250,6 +288,20 @@ Hệ thống đã tích hợp trực tiếp với kho GitHub thật: **[silasWor
    * `Manager Tuấn` (Reviewer Cấp 2): Thực hiện phê duyệt vòng cuối, duyệt xuất bản hoặc trả lại yêu cầu (Return) kèm lý do bắt buộc.
    * `Admin Hiếu` (Administrator): Toàn quyền xem xét cả 2 cấp, cấu hình mẫu biểu (Templates) và giám sát Lệch tài liệu (Drift Alerts).
 3. **Kiểm tra tính năng Real-time**: Khi tài liệu được duyệt, biểu tượng quả chuông thông báo ở thanh điều hướng sẽ tự động cập nhật số lượng thông báo mới.
+
+---
+
+### 7.5. Bước kết thúc: Dọn dẹp tài nguyên với `stop-all.ps1`
+
+Sau khi hoàn thành tất cả các bước kiểm thử, bạn dọn dẹp sạch sẽ tài nguyên bằng lệnh:
+
+```powershell
+# Cách A: Tắt toàn bộ dịch vụ và các container Docker hạ tầng
+.\stop-all.ps1 -Docker
+
+# Cách B: Chỉ tắt các tiến trình ứng dụng địa phương (giữ lại Docker DB/Kafka/Redis để kiểm thử tiếp)
+.\stop-all.ps1
+```
 
 ---
 

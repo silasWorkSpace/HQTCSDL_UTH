@@ -145,6 +145,21 @@ cd backend
 
 ## 4. Hướng dẫn khởi động lại hạ tầng và Services
 
+### 4.1. Khởi động 1-Click Toàn diện (Khuyên dùng)
+Tại thư mục gốc dự án:
+```powershell
+# Chế độ Full Docker (chạy trọn bộ hạ tầng + 6 microservices + AI engine trong Docker)
+.\start-all.ps1 -Docker
+
+# Chế độ Local Dev (tự động bật Docker Infra và mở các tab service có nhãn màu)
+.\start-all.ps1
+
+# Khi cần tắt:
+.\stop-all.ps1 -Docker
+```
+
+### 4.2. Khởi động thủ công từng dịch vụ riêng lẻ
+Nếu bạn muốn tự tay bật từng service theo cách thủ công:
 ```powershell
 # 1. Khởi động SQL Server, Redis, Kafka
 cd backend\infra
