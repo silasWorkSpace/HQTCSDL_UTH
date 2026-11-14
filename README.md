@@ -2,43 +2,69 @@
 
 ## 1. Giới thiệu
 
-**LivingDocs** là dự án phát triển hệ thống quản lý và cập nhật tài liệu kỹ thuật có hỗ trợ AI.
+**LivingDocs** là hệ thống quản lý, đồng bộ và tự động cập nhật tài liệu kỹ thuật có hỗ trợ AI (AI-Assisted Self-Updating Document System), được xây dựng trên kiến trúc hướng sự kiện (EDA) và Microservices hiện đại:
+- **Xác thực GitHub OAuth 2.0 & JIT Provisioning**: Đăng nhập trực tiếp bằng tài khoản GitHub, yêu cầu cấp quyền truy cập mã nguồn (`repo` scope), tự động tạo tài khoản người dùng với vai trò `Developer`, và lấy danh sách kho mã nguồn từ GitHub API.
+- **Tích hợp Kho mã nguồn GitHub**: Đồng bộ nhánh theo dõi, nhận sự kiện Git Webhook (Commit/Push, Pull Request) với chữ ký bảo mật HMAC SHA-256.
+- **Quy trình Phê duyệt 2 Cấp (Workflow & SoD)**: Đảm bảo nguyên tắc Tách biệt nhiệm vụ (Segregation of Duties): Developer soạn thảo, Staff kiểm duyệt kỹ thuật cấp 1, Manager phê duyệt xuất bản cấp 2.
+- **Tính toàn vẹn Dữ liệu SHA-256**: Kiểm tra chuỗi Hash liên kết bảo đảm tài liệu không bị chỉnh sửa trái phép ngoài quy trình.
+- **Thông báo Bất đồng bộ qua Apache Kafka**: Cập nhật thông báo sự kiện real-time cho các bên liên quan.
+- **AI Engine (FastAPI & AST)**: Trích xuất cú pháp cây mã nguồn (Tree-Sitter), phát hiện lệch lạc tài liệu (Drift Detection) và tự động che giấu thông tin nhạy cảm (Secret Masker).
 
-Repository này chứa source code và tài liệu phục vụ quá trình phát triển dự án của nhóm.
+Repository này chứa toàn bộ mã nguồn backend, frontend, hạ tầng Docker và tài liệu phục vụ quá trình phát triển dự án của nhóm.
+
+---
 
 ## 2. Cấu trúc repository
 
+```
 HQTCSDL_UTH/
-├── backend/       # Source code backend
-├── frontend/      # Source code frontend React + Vite
-├── docs/          # Tài liệu, sơ đồ và đặc tả dự án
-└── README.md      # Hướng dẫn dự án
+├── backend/                  # Toàn bộ mã nguồn Backend
+│   ├── services/             # 6 Microservices Spring Boot (Identity, Integration, Document, Workflow, Governance, Notification)
+│   ├── libs/                 # Thư viện dùng chung (common-security, common-web, common-events)
+│   ├── ai-engine/            # Dịch vụ AI trích xuất AST và LLM (Python FastAPI)
+│   └── infra/                # Cấu hình Docker Compose, file .env và kịch bản CSDL SQL Server (mssql/)
+├── frontend/                 # Ứng dụng Frontend React + Vite
+├── docs/                     # Tài liệu thiết kế, sơ đồ CSDL và báo cáo phân hệ
+├── start-all.ps1             # Kịch bản khởi động 1-click toàn bộ hệ thống
+├── stop-all.ps1              # Kịch bản dừng sạch toàn bộ hệ thống
+└── README.md                 # Hướng dẫn dự án chi tiết
+```
+
+---
 
 ## 3. Yêu cầu môi trường
 
-Trước khi chạy dự án, cần cài đặt:
+Trước khi chạy dự án, máy tính cần cài đặt:
 
-- Git  https://git-scm.com/install/windows
-- Node.js và npm (để chạy frontend)  https://nodejs.org/en/download
-- Môi trường chạy backend phù hợp với công nghệ được sử dụng
+- **Git**: [https://git-scm.com/install/windows](https://git-scm.com/install/windows)
+- **Node.js & npm** (LTS >= 20.x): [https://nodejs.org/en/download](https://nodejs.org/en/download)
+- **Java JDK 21**: [https://adoptium.net/](https://adoptium.net/) (nếu chạy Local Dev không qua Docker)
+- **Python 3.12**: [https://www.python.org/downloads/](https://www.python.org/downloads/) (nếu chạy AI Engine local)
+- **Docker Desktop**: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/) (khuyến nghị cho chạy toàn bộ hệ thống)
+
+---
 
 ## 4. Clone repository
 
 Mở Terminal hoặc PowerShell và chạy:
 
-`git clone https://github.com/silasWorkSpace/HQTCSDL_UTH.git`
+```bash
+git clone https://github.com/silasWorkSpace/HQTCSDL_UTH.git
+cd HQTCSDL_UTH
+```
 
-`cd HQTCSDL_UTH`
+Nếu đã clone repository trước đó, hãy cập nhật mã nguồn mới nhất:
 
-Nếu đã clone repository trước đó, cập nhật mã nguồn mới nhất:
+```bash
+git switch main
+git pull origin main
+```
 
-`git switch main`
-
-`git pull origin main`
+---
 
 ## 5. Khởi động & Dừng TOÀN BỘ Hệ thống (1-Click `start-all.ps1` & `stop-all.ps1`)
 
-Thay vì phải mở hàng loạt terminal thủ công để cấu hình và bật từng dịch vụ riêng lẻ, bạn chỉ cần mở PowerShell tại thư mục gốc dự án và sử dụng kịch bản 1-click duy nhất:
+Thay vì phải mở hàng loạt terminal thủ công để cấu hình và bật từng dịch vụ riêng lẻ, bạn chỉ cần mở PowerShell tại thư mục gốc dự án và sử dụng kịch bản 1-click:
 
 ### 5.1. Khởi động hệ thống (`start-all.ps1`)
 
@@ -51,14 +77,16 @@ Thay vì phải mở hàng loạt terminal thủ công để cấu hình và b�
 ```
 
 * **Chế độ Full Docker (`-Docker`)**:
-  1. Tự động kiểm tra và biên dịch siêu tốc các file JAR trên máy host (tận dụng 100% cache `.m2` có sẵn, 0% tải mạng ngoài, không bao giờ bị lỗi SSL handshake).
-  2. Tự động đóng gói và khởi chạy **10 containers** trong Docker (SQL Server, Redis, Kafka, 6 Spring Boot Services, FastAPI AI Engine) trong trạng thái Healthy.
-  3. Tự động khởi chạy Frontend Vite và mở trình duyệt web tại `http://localhost:5173`.
+  1. Tự động kiểm tra Docker Desktop đã bật hay chưa.
+  2. Tự động biên dịch nhanh các file JAR trên máy host (tận dụng cache `.m2` có sẵn, không lỗi SSL mạng).
+  3. Bật hạ tầng SQL Server, Redis, Kafka; chờ SQL Server sẵn sàng và tự động chạy `db.ps1 init` + `tenant demo` + `seed demo` nếu database chưa tồn tại.
+  4. Đóng gói và khởi chạy **10 containers** Docker (`mssql`, `redis`, `kafka`, 6 Spring Boot Services, FastAPI AI Engine) trong trạng thái Healthy.
+  5. Tự động khởi chạy Frontend Vite và mở trình duyệt web tại `http://localhost:5173`.
 
 * **Chế độ Local Dev (Mặc định)**:
   1. Tự động giải phóng các port nếu đang bị tiến trình cũ chiếm dụng (8081–8086, 8090, 5173).
   2. Tự động bật cụm hạ tầng Docker (SQL Server, Redis, Kafka).
-  3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên và icon màu rõ ràng) để tiện theo dõi log thời gian thực.
+  3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên và icon màu) để tiện theo dõi log thời gian thực.
   4. Tự động mở trình duyệt web tại `http://localhost:5173`.
 
 * **Tùy chọn bổ sung:**
@@ -79,25 +107,67 @@ Khi kết thúc phiên làm việc hoặc kiểm thử, bạn có thể dọn d�
 .\stop-all.ps1 -Docker
 ```
 
-## 6. Chạy Frontend thủ công
+---
+
+## 6. Cấu hình Biến Môi trường & GitHub OAuth 2.0 (`.env`)
+
+Dự án sử dụng file `backend/infra/docker/.env` để quản lý biến môi trường bảo mật. File này đã được thêm vào `.gitignore` để không bao giờ bị lộ lên git.
+
+### 6.1. Thiết lập file `.env`
+Sao chép từ file mẫu:
+```powershell
+Copy-Item backend/infra/docker/.env.example backend/infra/docker/.env
+```
+
+Nội dung cấu hình cơ bản trong `.env`:
+```env
+# Mật khẩu SQL Server sa
+MSSQL_SA_PASSWORD=Living_Docs_2026!
+
+# Khóa ký JWT nội bộ (HS256, tối thiểu 32 ký tự)
+JWT_SECRET=dev-only-secret-change-me-dev-only-secret-change-me
+
+# Cấu hình GitHub OAuth App (FR-AUTH-02)
+GITHUB_CLIENT_ID=your-github-oauth-client-id
+GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
+GITHUB_REDIRECT_URI=http://localhost:5173/auth/callback
+GITHUB_SCOPE=read:user,user:email,repo
+```
+
+### 6.2. Các bước tạo GitHub OAuth App thật để đăng nhập:
+1. Truy cập **[https://github.com/settings/developers](https://github.com/settings/developers)**.
+2. Chọn mục **OAuth Apps** $\rightarrow$ nhấn **New OAuth App**.
+3. Điền các trường:
+   - **Application name**: `LivingDocs`
+   - **Homepage URL**: `http://localhost:5173` *(hoặc domain deploy thực tế)*
+   - **Authorization callback URL**: `http://localhost:5173/auth/callback`
+4. Nhấn **Register application**.
+5. Copy **Client ID** dán vào `GITHUB_CLIENT_ID` trong `.env`.
+6. Nhấn **Generate a new client secret**, copy mã bí mật dán vào `GITHUB_CLIENT_SECRET` trong `.env`.
+
+---
+
+## 7. Chạy Frontend Thủ công
 
 Di chuyển vào thư mục frontend:
 
-** `cd frontend`
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-** `npm install`
+Sau khi chạy thành công, mở địa chỉ `http://localhost:5173` trên trình duyệt.
 
-** `npm run dev`
+---
 
-Sau khi chạy thành công, mở địa chỉ local được hiển thị trong Terminal (thường là `http://localhost:5173`).
+## 8. Chạy Backend Thủ công
 
-## 6. Chạy Backend
+Chi tiết cấu trúc và cách khởi chạy từng service riêng biệt bằng Maven hoặc Python, xem tại: [`backend/README.md`](backend/README.md).
 
-Backend hiện được quản lý trong thư mục `backend/` bao gồm hệ thống Microservices Spring Boot, AI Engine FastAPI, Apache Kafka, Redis và SQL Server.
+---
 
-Chi tiết cài đặt xem tại: [`backend/README.md`](backend/README.md).
-
-## 7. Hướng dẫn Kiểm thử Thủ công (Manual Testing Guide)
+## 9. Hướng dẫn Kiểm thử Thủ công (Manual Testing Guide)
 
 Toàn bộ hệ thống hỗ trợ kiểm thử thủ công qua 2 phương thức trực quan:
 1. **Swagger UI & OpenAPI Docs**: Kiểm thử chuyên sâu từng API endpoint của Backend & AI Engine.
@@ -105,34 +175,13 @@ Toàn bộ hệ thống hỗ trợ kiểm thử thủ công qua 2 phương thứ
 
 ---
 
-### 7.1. Bước 0: Khởi động hệ sinh thái với `start-all.ps1`
-
-Trước khi bắt đầu bất kỳ kịch bản nào, hãy mở PowerShell tại thư mục gốc và khởi động hệ thống:
-
-```powershell
-# Cách A (Khuyến nghị cho kiểm thử Docker): Khởi chạy 100% dịch vụ trong Docker
-.\start-all.ps1 -Docker
-
-# Cách B (Khuyến nghị cho kiểm thử Local): Mở các Tab Console trực quan
-.\start-all.ps1
-```
-
-* **Xác nhận trạng thái sẵn sàng**:
-  Nếu chạy ở chế độ Docker, bạn có thể kiểm tra nhanh bằng lệnh:
-  ```powershell
-  docker compose -f backend/infra/docker/docker-compose.yml --profile full ps
-  ```
-  Tất cả 10 containers (`mssql`, `redis`, `kafka`, 6 Spring Boot Services, `ai-engine`) phải hiển thị trạng thái `Up` hoặc `Up (healthy)`.
-
----
-
-### 7.2. Bảng điều khiển & Đường dẫn truy cập trực tiếp
+### 9.1. Bảng điều khiển & Đường dẫn truy cập trực tiếp
 
 | Thành phần | Cổng (Port) | Đường dẫn trực tiếp | Mục đích kiểm thử |
 | :--- | :---: | :--- | :--- |
-| **Frontend Web** | `5173` | [http://localhost:5173](http://localhost:5173) | Giao diện tương tác người dùng React + Vite |
-| **Identity Service** | `8081` | [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) | Quản lý người dùng, tạo Dev Token (Developer, Staff, Manager) |
-| **Integration Service** | `8082` | [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html) | Tích hợp GitHub thật, Ingestion Webhook HMAC SHA-256 |
+| **Frontend Web** | `5173` | [http://localhost:5173](http://localhost:5173) | Giao diện React + Vite, Đăng nhập GitHub OAuth, Soạn thảo, Duyệt bài |
+| **Identity Service** | `8081` | [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) | Đăng nhập GitHub OAuth, JIT User Provisioning, Lấy danh sách Repo |
+| **Integration Service** | `8082` | [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html) | Tích hợp GitHub App thật, Ingestion Webhook HMAC SHA-256 |
 | **Document Service** | `8083` | [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html) | Quản lý bản thảo tài liệu, kiểm tra chuỗi Hash SHA-256 |
 | **Workflow Service** | `8084` | [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html) | Hàng đợi duyệt 2 cấp (Staff -> Manager), Code Drift Alerts |
 | **Governance Service** | `8085` | [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html) | Biểu mẫu tài liệu (Templates), Quy chuẩn tài liệu |
@@ -141,51 +190,31 @@ Trước khi bắt đầu bất kỳ kịch bản nào, hãy mở PowerShell t�
 
 ---
 
-### 7.3. Chuẩn bị Token Phân quyền (Identity Service - Port 8081)
+### 9.2. Kịch bản Kiểm thử Thủ công Chi tiết
 
-Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn JWT và phân quyền vai trò (Role-Based Access Control). Hãy chuẩn bị token trước khi thực hiện các kịch bản:
+#### KỊCH BẢN 1: Xác thực GitHub OAuth 2.0 & Lấy danh sách Repositories (Identity Service - Port 8081 & Frontend - Port 5173)
 
-1. Mở Swagger UI của **Identity Service**: [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html).
-2. Vào endpoint `POST /api/v1/auth/dev-token` $\rightarrow$ bấm **Try it out**.
-3. Điền payload theo từng vai trò bạn cần kiểm thử:
-   * **Developer (Người soạn thảo)**:
-     ```json
-     {
-       "userId": "11111111-1111-1111-1111-111111111111",
-       "role": "Developer",
-       "tenant": "demo"
-     }
-     ```
-   * **Staff (Người duyệt cấp 1)**:
-     ```json
-     {
-       "userId": "22222222-2222-2222-2222-222222222222",
-       "role": "Staff",
-       "tenant": "demo"
-     }
-     ```
-   * **Manager (Người duyệt cấp 2 / Quyết định xuất bản)**:
-     ```json
-     {
-       "userId": "33333333-3333-3333-3333-333333333333",
-       "role": "Manager",
-       "tenant": "demo"
-     }
-     ```
-4. Bấm **Execute**. Copy chuỗi token trong trường `"token"` ở phần kết quả trả về.
-5. **Cách gắn token trên Swagger:**
-   * Tại Swagger của dịch vụ cần gọi (`8082`, `8083`, `8084`, `8085`, `8086`), bấm nút xanh **Authorize** (hình ổ khóa 🔓) ở góc trên bên phải.
-   * Dán chuỗi token vừa copy vào ô `Value` (có thể gõ `Bearer <token>` hoặc dán thẳng token).
-   * Bấm **Authorize** $\rightarrow$ **Close**. Ổ khóa sẽ chuyển sang trạng thái đã khóa 🔒.
+1. **Đăng nhập trên giao diện Web UI**:
+   * Truy cập `http://localhost:5173/login`.
+   * Nhấn nút **"Đăng nhập với GitHub"** (biểu tượng GitHub).
+   * Trình duyệt sẽ chuyển hướng sang trang ủy quyền chính thức của GitHub yêu cầu cấp quyền truy cập tài khoản và Repositories (`repo` scope).
+   * Bấm **Authorize**: Hệ thống nhận authorization code, tự động tạo user mới trong CSDL với role `Developer` (JIT Provisioning), cấp phát JWT token và chuyển hướng bạn vào trang `/documents`.
+   * Kiểm tra `localStorage`: Token JWT và `ld_github_token` được lưu tự động cho phiên làm việc.
+
+2. **Kiểm tra API lấy danh sách Repositories trên Swagger**:
+   * Mở [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html).
+   * Vào `GET /api/v1/auth/github/repos`, bấm **Try it out**.
+   * Dán GitHub Access Token vào header `X-GitHub-Token` (hoặc truyền qua query parameter).
+   * Nhấn **Execute**: Hệ thống trả về danh sách toàn bộ kho mã nguồn thật của tài khoản GitHub kèm tên, nhánh mặc định, trạng thái private/public và URL.
 
 ---
 
-### 7.4. Kịch bản Kiểm thử Thủ công Chi tiết
+#### KỊCH BẢN 2: Quản lý Bản thảo & Kiểm tra Chuỗi Hash SHA-256 (Document Service - Port 8083)
 
-#### KỊCH BẢN 1: Quản lý Bản thảo & Kiểm tra Chuỗi Hash SHA-256 (Document Service - Port 8083)
-
-1. **Tạo tài liệu mới**:
-   * Mở [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html), gắn token của **Developer**.
+1. **Chuẩn bị Token Developer**:
+   * Mở [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) $\rightarrow$ `POST /api/v1/auth/dev-token` với `role: "Developer"`, copy token.
+   * Mở [http://localhost:8083/swagger-ui.html](http://localhost:8083/swagger-ui.html), bấm **Authorize** và dán token vào.
+2. **Tạo tài liệu mới**:
    * Gọi `POST /api/v1/documents` với payload:
      ```json
      {
@@ -194,31 +223,27 @@ Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn
        "pathInRepo": "docs/auth-api.md"
      }
      ```
-   * Kết quả: Trả về HTTP `201 Created` kèm `id` của tài liệu và `currentVersionNo: 1`. Hãy lưu lại `id` này.
-
-2. **Kiểm tra tính toàn vẹn chuỗi Hash (SHA-256)**:
+   * Kết quả: Trả về HTTP `201 Created` kèm `id` của tài liệu và `currentVersionNo: 1`.
+3. **Kiểm tra tính toàn vẹn chuỗi Hash (SHA-256)**:
    * Gọi `GET /api/v1/documents/{id}/integrity` (điền `{id}` vừa tạo).
-   * Kết quả: Trả về `valid: true` kèm `hash` SHA-256 của nội dung tài liệu, chứng minh dữ liệu không bị can thiệp trái phép.
-
-3. **Cập nhật nội dung phiên bản mới**:
+   * Kết quả: Trả về `valid: true` kèm `hash` SHA-256 của nội dung tài liệu.
+4. **Cập nhật nội dung phiên bản mới**:
    * Gọi `PUT /api/v1/documents/{id}` kèm `baseVersionNo: 1` và nội dung sửa đổi.
-   * Hệ thống sẽ tự động tăng phiên bản lên `versionNo: 2` và tính toán lại SHA-256 hash mới liên kết với hash cũ.
+   * Hệ thống tự động tăng lên `versionNo: 2` và tính toán SHA-256 hash mới liên kết với hash cũ.
 
 ---
 
-#### KỊCH BẢN 2: Quy trình Phê duyệt 2 Cấp & Kiểm tra Tính Tách biệt Nhiệm vụ (Workflow Service - Port 8084)
+#### KỊCH BẢN 3: Quy trình Phê duyệt 2 Cấp & Tách biệt Nhiệm vụ (Workflow Service - Port 8084)
 
 1. **Developer nộp tài liệu vào hàng đợi duyệt**:
    * Mở [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html), giữ token **Developer**.
-   * Gọi `POST /api/v1/documents/{id}/submit` với `{id}` tài liệu ở Kịch bản 1.
-   * Kết quả: Trả về `reviewTask` với trạng thái `PENDING_STAFF` và `stage: "Staff"`. Lưu lại trường `reviewTask.id`.
-
+   * Gọi `POST /api/v1/documents/{id}/submit` với `{id}` tài liệu ở Kịch bản 2.
+   * Kết quả: Trả về `reviewTask` với trạng thái `PENDING_STAFF` và `stage: "Staff"`. Lưu lại `reviewTask.id`.
 2. **Kiểm tra quy tắc Tách biệt nhiệm vụ (Segregation of Duties - SoD)**:
    * Giữ token **Developer** (người tạo tài liệu), thử gọi `POST /api/v1/reviews/{reviewTaskId}/decisions` với `{"decision": "approve"}`.
-   * **Kết quả kỳ vọng**: Hệ thống từ chối với mã lỗi `400 Bad Request` hoặc `403 Forbidden` kèm thông báo vi phạm chính sách: *Người tạo không được phép tự duyệt tài liệu của chính mình*.
-
+   * **Kết quả kỳ vọng**: Hệ thống từ chối với mã lỗi `400 Bad Request` hoặc `403 Forbidden`: *Người tạo không được phép tự duyệt tài liệu của chính mình*.
 3. **Staff thực hiện duyệt Cấp 1**:
-   * Bấm nút **Authorize**, dán token của vai trò **Staff**.
+   * Lấy token của vai trò **Staff** từ Identity Service (`8081`), dán vào nút **Authorize** của cổng `8084`.
    * Gọi `POST /api/v1/reviews/{reviewTaskId}/decisions`:
      ```json
      {
@@ -227,9 +252,8 @@ Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn
      }
      ```
    * Kết quả: Nhiệm vụ tự động chuyển sang cấp 2 `PENDING_MANAGER` (`stage: "Manager"`).
-
 4. **Manager thực hiện duyệt Cấp 2 (Xuất bản chính thức)**:
-   * Bấm nút **Authorize**, dán token của vai trò **Manager**.
+   * Lấy token vai trò **Manager**, dán vào nút **Authorize** của cổng `8084`.
    * Gọi `POST /api/v1/reviews/{reviewTaskId}/decisions`:
      ```json
      {
@@ -237,52 +261,48 @@ Hầu hết các API của hệ thống đều được bảo vệ bởi chuẩn
        "comment": "Phê duyệt xuất bản tài liệu lên hệ thống chính thức."
      }
      ```
-   * **Kết quả**:
-     * Trạng thái tài liệu chuyển thành `PUBLISHED`.
-     * Workflow Service tự động xuất bản sự kiện Kafka `NOTIFICATION_EVENT` sang topic `ld.notifications`.
+   * **Kết quả**: Trạng thái tài liệu chuyển thành `PUBLISHED` và Workflow Service tự động xuất bản sự kiện Kafka `NOTIFICATION_EVENT` sang topic `ld.notifications`.
 
 ---
 
-#### KỊCH BẢN 3: Tiêu thụ Thông báo Kafka Real-Time (Notification Service - Port 8086)
+#### KỊCH BẢN 4: Tiêu thụ Thông báo Kafka Real-Time (Notification Service - Port 8086)
 
 1. Mở [http://localhost:8086/swagger-ui.html](http://localhost:8086/swagger-ui.html).
 2. Bấm **Authorize**, dán token của **Developer** (người nộp tài liệu).
 3. Gọi `GET /api/v1/notifications`.
-4. **Kết quả**: Bạn sẽ thấy bản ghi thông báo mới được Notification Service tiêu thụ bất đồng bộ từ Kafka broker với nội dung:
-   * Thông báo: *"Tài liệu 'Tài liệu API Xác thực Người dùng' đã được phê duyệt và xuất bản."*
+4. **Kết quả**: Nhận thông báo mới được tiêu thụ bất đồng bộ từ Kafka broker:
+   * Nội dung: *"Tài liệu 'Tài liệu API Xác thực Người dùng' đã được phê duyệt và xuất bản."*
    * Trạng thái: `UNREAD`.
 5. *(Tùy chọn)* Đánh dấu đã đọc bằng `PATCH /api/v1/notifications/{id}/read`.
 
 ---
 
-#### KỊCH BẢN 4: Tích hợp Kho GitHub thật & Webhook Ingestion (Integration Service - Port 8082)
+#### KỊCH BẢN 5: Tích hợp Kho GitHub thật & Webhook Ingestion (Integration Service - Port 8082)
 
-Hệ thống đã tích hợp trực tiếp với kho GitHub thật: **[silasWorkSpace/HQTCSDL_UTH](https://github.com/silasWorkSpace/HQTCSDL_UTH)** (GitHub Repo ID: `1404979837`).
+Hệ thống đã tích hợp trực tiếp với kho GitHub: **[silasWorkSpace/HQTCSDL_UTH](https://github.com/silasWorkSpace/HQTCSDL_UTH)** (GitHub Repo ID: `1404979837`).
 
 1. Mở [http://localhost:8082/swagger-ui.html](http://localhost:8082/swagger-ui.html).
-2. Gọi `GET /api/v1/repositories`:
-   * Xem thông tin kho đã kết nối (`connected: true`), nhánh theo dõi mặc định (`main`), và Webhook URL.
-3. Gọi `GET /api/v1/repositories/{id}/events`:
-   * Xem danh sách các sự kiện commit/push và Pull Request thực tế từ GitHub được xác thực chữ ký HMAC SHA-256 (`x-hub-signature-256`) và lưu vào CSDL.
+2. Gọi `GET /api/v1/repositories`: Xem thông tin kho đã kết nối (`connected: true`) và nhánh theo dõi mặc định (`main`).
+3. Gọi `GET /api/v1/repositories/{id}/events`: Xem danh sách các sự kiện commit/push và Pull Request thực tế từ GitHub được xác thực chữ ký HMAC SHA-256 (`x-hub-signature-256`).
 
 ---
 
-#### KỊCH BẢN 5: AI Engine - Bóc tách Cú pháp AST & Che giấu Bí mật (Port 8090)
+#### KỊCH BẢN 6: AI Engine - Bóc tách Cú pháp AST & Che giấu Bí mật (Port 8090)
 
 1. Mở tài liệu API của AI Engine: [http://localhost:8090/docs](http://localhost:8090/docs).
 2. **Kiểm tra bóc tách AST (Tree-Sitter Java Spring / Python FastAPI)**:
-   * Gọi `POST /api/v1/ast/analyze` với danh sách tệp nguồn hoặc đoạn mã mẫu.
-   * Kết quả: Trả về cấu trúc cây phân cấp gồm `class`, `method`, `endpoint` (kèm route HTTP và sub-path), cùng liên kết `parent_id` chuẩn xác.
+   * Gọi `POST /api/v1/ast/analyze` với tệp nguồn hoặc đoạn mã mẫu.
+   * Kết quả: Trả về cấu trúc cây phân cấp gồm `class`, `method`, `endpoint` (kèm HTTP verb và sub-path).
 3. **Kiểm tra cơ chế Che giấu Bí mật (Secret Masker - NFR-SEC-08)**:
-   * Gọi `POST /api/v1/ai/generate-doc` với đoạn văn bản chứa API key hoặc mật khẩu giả định (ví dụ: `password="SuperSecret123!"` hoặc `api_key: AIzaSyD...`).
-   * Kết quả: Bản thảo tài liệu do LLM sinh ra tự động che giấu các chuỗi nhạy cảm thành `***MASKED***`, đảm bảo tuyệt đối an toàn dữ liệu.
+   * Gọi `POST /api/v1/ai/generate-doc` với đoạn văn bản chứa API key hoặc mật khẩu giả định (ví dụ: `password="SuperSecret123!"`).
+   * Kết quả: Bản thảo tài liệu do LLM sinh ra tự động che giấu các chuỗi nhạy cảm thành `***MASKED***`.
 
 ---
 
-#### KỊCH BẢN 6: Kiểm thử Trực quan trên Giao diện Web (Frontend UI - Port 5173)
+#### KỊCH BẢN 7: Kiểm thử Trực quan trên Giao diện Web (Frontend UI - Port 5173)
 
 1. Mở trình duyệt tại [http://localhost:5173](http://localhost:5173).
-2. **Chọn vai trò đăng nhập**: Hệ thống cung cấp sẵn các profile tiện lợi ở góc trên màn hình:
+2. **Chọn vai trò đăng nhập**: Sử dụng profile có sẵn ở thanh điều hướng trên cùng:
    * `Dev Minh` (Developer): Trải nghiệm soạn thảo tài liệu bằng Markdown Editor, xem so sánh Diff trực quan giữa 2 phiên bản (highlight xanh/đỏ), nộp yêu cầu phê duyệt.
    * `Staff Lan` (Reviewer Cấp 1): Truy cập màn hình **Hàng đợi xét duyệt**, xem chi tiết nội dung, thêm nhận xét (comment) tại từng số dòng cụ thể, bấm nút Phê duyệt / Từ chối.
    * `Manager Tuấn` (Reviewer Cấp 2): Thực hiện phê duyệt vòng cuối, duyệt xuất bản hoặc trả lại yêu cầu (Return) kèm lý do bắt buộc.
@@ -291,21 +311,7 @@ Hệ thống đã tích hợp trực tiếp với kho GitHub thật: **[silasWor
 
 ---
 
-### 7.5. Bước kết thúc: Dọn dẹp tài nguyên với `stop-all.ps1`
-
-Sau khi hoàn thành tất cả các bước kiểm thử, bạn dọn dẹp sạch sẽ tài nguyên bằng lệnh:
-
-```powershell
-# Cách A: Tắt toàn bộ dịch vụ và các container Docker hạ tầng
-.\stop-all.ps1 -Docker
-
-# Cách B: Chỉ tắt các tiến trình ứng dụng địa phương (giữ lại Docker DB/Kafka/Redis để kiểm thử tiếp)
-.\stop-all.ps1
-```
-
----
-
-## 8. Chạy Kiểm thử Tự động (Automated Testing)
+## 10. Chạy Kiểm thử Tự động (Automated Testing)
 
 Bên cạnh kiểm thử thủ công, nhóm phát triển có thể chạy nhanh các bộ kiểm thử tự động:
 
@@ -325,21 +331,25 @@ docker run --rm livingdocs-ai-engine python -m pytest tests
 
 ---
 
-## 9. Quy tắc làm việc với Git
+## 11. Quy tắc làm việc với Git
 
 Để tránh xung đột mã nguồn, thành viên nên tạo nhánh riêng cho từng tính năng hoặc nhiệm vụ.
 
 Tạo nhánh mới từ `main` đã cập nhật:
 
-`git switch main`
-`git pull origin main`
-`git switch -c feature/ten-tinh-nang`
+```bash
+git switch main
+git pull origin main
+git switch -c feature/ten-tinh-nang
+```
 
 Sau khi hoàn thành công việc:
 
-`git add .`
-`git commit -m "feat: mô tả chức năng"`
-`git push -u origin feature/ten-tinh-nang`
+```bash
+git add .
+git commit -m "feat: mô tả chức năng"
+git push -u origin feature/ten-tinh-nang
+```
 
 Sau đó tạo **Pull Request (PR)** trên GitHub để xem xét và merge vào `main`.
 
@@ -350,6 +360,8 @@ Sau đó tạo **Pull Request (PR)** trên GitHub để xem xét và merge vào 
 - Luôn cập nhật `main` trước khi tạo nhánh làm việc mới.
 - Không tự ý xóa hoặc thay đổi các tài liệu trong `docs/` khi chưa thống nhất với nhóm.
 
-## 10. Đóng góp
+---
+
+## 12. Đóng góp
 
 Mọi thành viên cần đọc tài liệu trong `docs/`, thống nhất nhiệm vụ được giao và tuân thủ quy trình Git của nhóm trước khi phát triển tính năng mới.

@@ -66,6 +66,8 @@ cp .env.example .env
 
 | Màn hình | Đường dẫn | Vai trò được phép | Mô tả |
 |---|---|---|---|
+| **Đăng nhập** | `/login` | Public (Tất cả) | Đăng nhập bằng Email/Mật khẩu hoặc Đăng nhập ủy quyền qua tài khoản GitHub (OAuth 2.0). |
+| **Xử lý OAuth Callback** | `/auth/callback` | Public (Tất cả) | Tiếp nhận Authorization Code từ GitHub, gọi API trao đổi JWT, JIT Provisioning và lưu token phiên làm việc. |
 | **Danh sách tài liệu** | `/documents` | Developer, Staff, Manager, TechLead | Bảng tài liệu kèm bộ lọc repo/trạng thái, 3 chỉ báo trạng thái độc lập (DocStatusBadges), nút sinh tài liệu AI. |
 | **Chi tiết tài liệu** | `/documents/:id` | Developer, Staff, Manager, TechLead | Hiển thị nội dung bằng MarkdownView, điểm tin cậy AI, danh sách grounding evidence, liên kết mã nguồn và kiểm tra chuỗi hash (Integrity). |
 | **Chỉnh sửa bản nháp** | `/documents/:id/edit` | Developer (khi DRAFT hoặc CHANGES_REQUESTED) | Soạn thảo 2 cột (Markdown trái, Live Preview phải), xử lý xung đột 409 và cảnh báo thay đổi chưa lưu. |

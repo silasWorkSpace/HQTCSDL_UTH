@@ -127,6 +127,33 @@ Repository thực tế: **[https://github.com/silasWorkSpace/HQTCSDL_UTH](https:
 
 ---
 
+### KỊCH BẢN 3: ĐĂNG NHẬP GITHUB OAUTH 2.0 & LẤY DANH SÁCH REPOSITORIES (Identity Service - Port 8081)
+
+Hệ thống hỗ trợ xác thực bằng GitHub OAuth 2.0 Authorization Code Flow kèm quyền truy cập kho mã nguồn (`repo` scope):
+
+1. **Lấy URL ủy quyền GitHub OAuth**:
+   - Mở [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) $\rightarrow$ `GET /api/v1/auth/github/url`.
+   - Kết quả trả về URL chuyển hướng có dạng:
+     `https://github.com/login/oauth/authorize?client_id=...&redirect_uri=http://localhost:5173/auth/callback&scope=read:user,user:email,repo&state=demo`
+2. **Tiếp nhận mã Callback và cấp phát Token**:
+   - Khi người dùng chấp thuận ủy quyền trên GitHub, GitHub sẽ redirect về callback URL kèm mã `code`.
+   - Gọi `POST /api/v1/auth/github/callback` với JSON payload:
+     ```json
+     {
+       "code": "your_github_auth_code",
+       "tenant": "demo",
+       "redirectUri": "http://localhost:5173/auth/callback"
+     }
+     ```
+   - **Kết quả**:
+     - Hệ thống tự động tìm kiếm user: nếu chưa có, tự động tạo mới (JIT Provisioning) với role mặc định `Developer`.
+     - Trả về `TokenResponse` chứa cả JWT nội bộ của LivingDocs (`accessToken`, `refreshToken`) và `githubAccessToken`.
+3. **Lấy danh sách Repositories từ GitHub API**:
+   - Gọi `GET /api/v1/auth/github/repos` với header `X-GitHub-Token: <github_access_token>`.
+   - Hệ thống kết nối GitHub API `https://api.github.com/user/repos` và trả về toàn bộ danh sách repository thật của user (tên, default branch, public/private, URL).
+
+---
+
 ## 3. KỊCH BẢN CHẠY TEST TỰ ĐỘNG BẰNG SCRIPT
 
 Nếu muốn kiểm thử nhanh toàn bộ các luồng chỉ bằng một dòng lệnh PowerShell:
