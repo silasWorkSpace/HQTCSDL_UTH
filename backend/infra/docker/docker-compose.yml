@@ -192,8 +192,8 @@ services:
   ai-engine:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: ai-engine/Dockerfile
+      context: ../../ai-engine
+      dockerfile: Dockerfile
     container_name: livingdocs-ai-engine
     environment:
       PORT: 8090

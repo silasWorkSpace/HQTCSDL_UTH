@@ -31,7 +31,7 @@ $aiDir       = Join-Path $backendDir "ai-engine"
 $frontendDir = Join-Path $root "frontend"
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "   🚀 LIVINGDOCS - KHỞI ĐỘNG HỆ THỐNG TỰ ĐỘNG BẰNG 1 LỆNH        " -ForegroundColor Cyan
+Write-Host "    LIVINGDOCS - KHỞI ĐỘNG HỆ THỐNG    " -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 # ------------------------------------------------------------------------------
@@ -51,7 +51,7 @@ if ($Docker) {
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '[LivingDocs] Frontend (:5173)'; Set-Location '$frontendDir'; npm run dev"
     }
 
-    Write-Host "`n🎉 HỆ THỐNG ĐÃ SẴN SÀNG!" -ForegroundColor Green
+    Write-Host "HỆ THỐNG ĐÃ SẴN SÀNG!" -ForegroundColor Green
     Write-Host "   - Frontend UI:        http://localhost:5173" -ForegroundColor White
     Write-Host "   - Identity Swagger:   http://localhost:8081/swagger-ui.html" -ForegroundColor White
     Write-Host "   - Integration Swagger:http://localhost:8082/swagger-ui.html" -ForegroundColor White

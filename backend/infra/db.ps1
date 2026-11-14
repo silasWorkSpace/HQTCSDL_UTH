@@ -108,7 +108,7 @@ function Start-Db {
         if (-not (Test-Path (Join-Path $infra "docker\.env"))) {
             throw "Chua co backend\infra\docker\.env. Hay copy tu .env.example roi dat mat khau."
         }
-        docker compose -f $compose up -d
+        docker compose -f $compose up -d mssql redis kafka
         if ($LASTEXITCODE -ne 0) { throw "docker compose up bi loi" }
         Wait-Healthy
     }

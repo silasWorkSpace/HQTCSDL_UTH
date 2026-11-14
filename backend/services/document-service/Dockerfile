@@ -1,17 +1,13 @@
+# document-service — multi-stage build, chạy bằng Java 21 JRE
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+COPY . .
+RUN mvn -f pom.xml -pl services/document-service -am -q package -DskipTests
+
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
-
-COPY target/*.jar app.jar
+COPY --from=build /build/services/document-service/target/*.jar app.jar
 
 ENV PORT=8083
-ENV DB_URL=jdbc:sqlserver://localhost:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
-ENV DB_USER=sa
-ENV DB_PASSWORD=LivingDocsPassw0rd!
-ENV KAFKA_SERVERS=localhost:9092
-ENV JWT_SECRET=LivingDocsSuperSecretKeyForJWTAuthentication2026LivingDocs!
-
 EXPOSE 8083
-
-ENTRYPOINT ["java", "-jar", "app.jar"]
-
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
