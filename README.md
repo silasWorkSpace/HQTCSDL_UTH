@@ -36,7 +36,35 @@ Nếu đã clone repository trước đó, cập nhật mã nguồn mới nhất
 
 `git pull origin main`
 
-## 5. Chạy Frontend
+## 5. Khởi động TOÀN BỘ Hệ thống với 1 lệnh duy nhất (1-Click Startup)
+
+Thay vì phải mở từng terminal để chạy từng dịch vụ riêng lẻ, bạn chỉ cần mở PowerShell tại thư mục gốc và chạy:
+
+```powershell
+# Khởi động toàn bộ: SQL Server, Redis, Kafka + 6 Microservices + AI Engine + Frontend Web
+.\start-all.ps1
+```
+
+Script sẽ tự động:
+1. Khởi động hạ tầng Docker (SQL Server, Redis, Kafka).
+2. Tự động giải phóng các port bị chiếm dụng (nếu có).
+3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên rõ ràng).
+4. Tự động mở trình duyệt web tại `http://localhost:5173`.
+
+**Tùy chọn:**
+* Chạy hoàn toàn bên trong Docker container: `.\start-all.ps1 -Docker`
+* Chỉ chạy backend và AI (không mở frontend): `.\start-all.ps1 -NoFrontend`
+
+Khi muốn dừng toàn bộ các service:
+```powershell
+# Tắt sạch các service đang chạy
+.\stop-all.ps1
+
+# Tắt cả các container Docker hạ tầng
+.\stop-all.ps1 -Docker
+```
+
+## 6. Chạy Frontend thủ công
 
 Di chuyển vào thư mục frontend:
 
