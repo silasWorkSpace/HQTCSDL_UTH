@@ -61,11 +61,11 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 > /dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 10s
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/19092' || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 20s
 
   identity-service:
     profiles: ["full"]
