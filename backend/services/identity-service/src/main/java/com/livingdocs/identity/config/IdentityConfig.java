@@ -16,7 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
 @Configuration
-@EnableConfigurationProperties(IdentityProperties.class)
+@EnableConfigurationProperties({IdentityProperties.class, GitHubOAuthProperties.class})
 public class IdentityConfig {
 
     @Bean

@@ -20,10 +20,18 @@ import ReviewPage from '../features/reviews/ReviewPage';
 import SuggestionQueuePage from '../features/suggestions/SuggestionQueuePage';
 import DriftHistoryPage from '../features/suggestions/DriftHistoryPage';
 
+// Auth Pages (FR-AUTH-02)
+import LoginPage from '../features/auth/pages/LoginPage';
+import OAuthCallbackPage from '../features/auth/pages/OAuthCallbackPage';
+
 export function AppRoutes({ activeRole }) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={ROUTES.DOCUMENTS} replace />} />
+
+      {/* Auth Routes */}
+      <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      <Route path={ROUTES.AUTH_CALLBACK} element={<OAuthCallbackPage />} />
 
       {/* Document Routes */}
       <Route path={ROUTES.DOCUMENTS} element={<DocumentListPage activeRole={activeRole} />} />

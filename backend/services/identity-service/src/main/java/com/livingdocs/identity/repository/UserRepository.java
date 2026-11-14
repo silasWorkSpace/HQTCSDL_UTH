@@ -51,6 +51,13 @@ public class UserRepository {
                 .list();
     }
 
+    public Optional<UserRecord> findByGithubUserId(long githubUserId) {
+        return db.sql("SELECT " + COLUMNS + " FROM {schema}.app_user WHERE github_user_id = :githubUserId")
+                .param("githubUserId", githubUserId)
+                .query(MAPPER)
+                .optional();
+    }
+
     public UUID insert(String email, String displayName, String passwordHash) {
         String id = db.sql("INSERT INTO {schema}.app_user (email, display_name, password_hash) "
                         + "OUTPUT inserted.id VALUES (:email, :name, :hash)")
@@ -60,6 +67,57 @@ public class UserRepository {
                 .query((rs, i) -> rs.getString(1))
                 .single();
         return UUID.fromString(id);
+    }
+
+    public UUID insertGithubUser(String email, String displayName, String oidcSubject, long githubUserId) {
+        String id = db.sql("INSERT INTO {schema}.app_user (email, display_name, password_hash, oidc_provider, oidc_subject, github_user_id) "
+                        + "OUTPUT inserted.id VALUES (:email, :name, NULL, 'github', :subject, :githubUserId)")
+                .param("email", email)
+                .param("name", displayName)
+                .param("subject", oidcSubject)
+                .param("githubUserId", githubUserId)
+                .query((rs, i) -> rs.getString(1))
+                .single();
+        return UUID.fromString(id);
+    }
+
+    public void linkGithubAccount(UUID id, String oidcSubject, long githubUserId) {
+        db.sql("UPDATE {schema}.app_user SET oidc_provider = 'github', oidc_subject = :subject, github_user_id = :githubUserId, updated_at = SYSUTCDATETIME() "
+                        + "WHERE id = :id")
+                .param("id", id.toString())
+                .param("subject", oidcSubject)
+                .param("githubUserId", githubUserId)
+                .update();
+    }
+
+    public record GithubUserProvisionResult(UserRecord user, boolean isNew) {}
+
+    /**
+     * Tra cứu và điều phối người dùng GitHub (FR-AUTH-02):
+     * 1. Nếu github_user_id đã tồn tại -> Trả về user hiện có.
+     * 2. Nếu email đã tồn tại -> Liên kết tài khoản hiện có với GitHub (linkGithubAccount).
+     * 3. Nếu chưa có -> Tạo mới user qua JIT Provisioning và đánh dấu isNew = true.
+     */
+    public GithubUserProvisionResult findOrProvisionGithubUser(String email, String displayName, String oidcSubject, long githubUserId) {
+        // 1. Kiểm tra theo github_user_id
+        Optional<UserRecord> byGithubId = findByGithubUserId(githubUserId);
+        if (byGithubId.isPresent()) {
+            return new GithubUserProvisionResult(byGithubId.get(), false);
+        }
+
+        // 2. Kiểm tra theo email: nếu đã có tài khoản -> liên kết tài khoản
+        Optional<UserRecord> byEmail = findByEmail(email);
+        if (byEmail.isPresent()) {
+            UserRecord existing = byEmail.get();
+            linkGithubAccount(existing.id(), oidcSubject, githubUserId);
+            UserRecord linked = findById(existing.id()).orElse(existing);
+            return new GithubUserProvisionResult(linked, false);
+        }
+
+        // 3. Nếu chưa có -> Tự động tạo user mới (JIT Provisioning)
+        UUID newId = insertGithubUser(email, displayName, oidcSubject, githubUserId);
+        UserRecord newUser = findById(newId).orElseGet(() -> new UserRecord(newId, email, displayName, null, "active", "vi"));
+        return new GithubUserProvisionResult(newUser, true);
     }
 
     public void touchLastLogin(UUID id) {

@@ -1,5 +1,8 @@
 package com.livingdocs.identity.controller;
 
+import com.livingdocs.identity.dto.GitHubAuthUrlResponse;
+import com.livingdocs.identity.dto.GitHubCallbackRequest;
+import com.livingdocs.identity.dto.GitHubRepositoryDto;
 import com.livingdocs.identity.dto.LoginRequest;
 import com.livingdocs.identity.dto.LogoutRequest;
 import com.livingdocs.identity.dto.RefreshRequest;
@@ -8,12 +11,16 @@ import com.livingdocs.identity.dto.TokenResponse;
 import com.livingdocs.identity.dto.UserResponse;
 import com.livingdocs.identity.service.AuthService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +32,26 @@ public class AuthController {
 
     public AuthController(AuthService auth) {
         this.auth = auth;
+    }
+
+    @GetMapping("/github/url")
+    public GitHubAuthUrlResponse getGitHubAuthUrl(
+            @RequestParam(name = "tenant", required = false, defaultValue = "demo") String tenant,
+            @RequestParam(name = "redirectUri", required = false) String redirectUri) {
+        return auth.getGitHubAuthUrl(tenant, redirectUri);
+    }
+
+    @PostMapping("/github/callback")
+    public TokenResponse handleGitHubCallback(@Valid @RequestBody GitHubCallbackRequest request) {
+        return auth.handleGitHubCallback(request);
+    }
+
+    @GetMapping("/github/repos")
+    public List<GitHubRepositoryDto> getGitHubRepos(
+            @RequestHeader(name = "X-GitHub-Token", required = false) String headerToken,
+            @RequestParam(name = "token", required = false) String paramToken) {
+        String token = (headerToken != null && !headerToken.isBlank()) ? headerToken : paramToken;
+        return auth.getGitHubRepositories(token);
     }
 
     @PostMapping("/register")

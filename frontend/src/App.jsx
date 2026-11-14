@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FileText, FileCode2, Globe, UserCheck, Shield, CheckSquare, GitPullRequest } from 'lucide-react';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { FileText, FileCode2, Globe, UserCheck, Shield, CheckSquare, GitPullRequest, LogIn } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import './styles/livingdocs.css';
+
+// Auth Feature Pages (FR-AUTH-02)
+import LoginPage from './features/auth/pages/LoginPage';
+import OAuthCallbackPage from './features/auth/pages/OAuthCallbackPage';
 
 // Document Feature Pages
 import DocumentListPage from './features/documents/pages/DocumentListPage';
@@ -196,6 +200,28 @@ function TopNavigation({ activeRole, onRoleChange }) {
               ))}
             </select>
           </div>
+
+          {/* Login Button (FR-AUTH-02) */}
+          <Link
+            to="/login"
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              color: '#1e293b',
+              backgroundColor: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <LogIn size={13} style={{ color: '#2563eb' }} />
+            <span>{t('auth.btnLogin') || 'Đăng nhập'}</span>
+          </Link>
         </div>
       </div>
     </header>
@@ -284,7 +310,10 @@ function AccessDenied() {
   );
 }
 
-export default function App() {
+function AppContent() {
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/auth/callback';
+
   const [userRole, setUserRole] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('ld_role') || 'Developer';
@@ -301,14 +330,16 @@ export default function App() {
   };
 
   return (
-    <I18nProvider>
-      <BrowserRouter>
-        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <TopNavigation activeRole={userRole} onRoleChange={handleRoleChange} />
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {!isAuthPage && <TopNavigation activeRole={userRole} onRoleChange={handleRoleChange} />}
 
-          <main style={{ flex: 1 }}>
-            <Routes>
-              {/* Documents module */}
+      <main style={{ flex: 1 }}>
+        <Routes>
+          {/* Auth module (FR-AUTH-02) */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+
+          {/* Documents module */}
               <Route
                 path="/"
                 element={
@@ -397,6 +428,14 @@ export default function App() {
             </Routes>
           </main>
         </div>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <BrowserRouter>
+        <AppContent />
       </BrowserRouter>
     </I18nProvider>
   );

@@ -80,6 +80,10 @@ services:
       REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: logstash
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-your-github-oauth-client-id}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-your-github-oauth-client-secret}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:5173/auth/callback}
+      GITHUB_SCOPE: ${GITHUB_SCOPE:-read:user,user:email,repo}
     ports:
       - "8081:8081"
     depends_on:

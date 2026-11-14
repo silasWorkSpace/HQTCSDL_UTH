@@ -26,7 +26,10 @@ $ErrorActionPreference = "Continue"
 $root        = $PSScriptRoot
 $backendDir  = Join-Path $root "backend"
 $infraDir    = Join-Path $backendDir "infra"
-$composeFile = Join-Path $infraDir "docker\docker-compose.yml"
+$dockerDir   = Join-Path $infraDir "docker"
+$composeFile = Join-Path $dockerDir "docker-compose.yml"
+$envFile     = Join-Path $dockerDir ".env"
+$envExample  = Join-Path $dockerDir ".env.example"
 $aiDir       = Join-Path $backendDir "ai-engine"
 $frontendDir = Join-Path $root "frontend"
 
@@ -34,12 +37,31 @@ Write-Host "=================================================================" -
 Write-Host "    LIVINGDOCS - KHỞI ĐỘNG HỆ THỐNG    " -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
+# Kiểm tra file .env
+if (-not (Test-Path $envFile)) {
+    if (Test-Path $envExample) {
+        Copy-Item $envExample $envFile
+        Write-Host ">> [THÔNG BÁO] Chưa có file .env, đã tự động tạo từ .env.example!" -ForegroundColor Yellow
+    }
+}
+
 # ------------------------------------------------------------------------------
 # 1. NẾU CHỌN CHẾ ĐỘ DOCKER FULL (-Docker)
 # ------------------------------------------------------------------------------
 if ($Docker) {
-    Write-Host "`n[1/3] Kiểm tra và biên dịch nhanh JARs trên máy host (tận dụng cache .m2 cực nhanh)..." -ForegroundColor Yellow
-    cd $backendDir
+    # 1.1 Kiểm tra Docker daemon
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Host ">> [LỖI] Không tìm thấy lệnh 'docker'. Vui lòng cài đặt và bật Docker Desktop!" -ForegroundColor Red
+        exit 1
+    }
+    docker ps 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ">> [LỖI] Docker daemon chưa khởi động! Vui lòng bật Docker Desktop trước." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "`n[1/4] Kiểm tra và biên dịch nhanh JARs trên máy host (tận dụng cache .m2 cực nhanh)..." -ForegroundColor Yellow
+    Set-Location $backendDir
     .\mvnw.cmd package -DskipTests -q
     if ($LASTEXITCODE -ne 0) {
         Write-Host ">> [LỖI] Không thể biên dịch backend JARs!" -ForegroundColor Red
@@ -47,8 +69,46 @@ if ($Docker) {
     }
     Write-Host ">> [OK] Đã biên dịch toàn bộ JARs thành công!" -ForegroundColor Green
 
-    Write-Host "`n[2/3] Đang đóng gói và khởi động các containers trong Docker (Profile: full)..." -ForegroundColor Yellow
-    docker compose -f $composeFile --profile full up -d --build
+    Write-Host "`n[2/4] Khởi động hạ tầng Docker (SQL Server, Redis, Kafka) và chuẩn bị CSDL..." -ForegroundColor Yellow
+    docker compose --env-file $envFile -f $composeFile up -d mssql redis kafka
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ">> [LỖI] docker compose up hạ tầng gặp sự cố!" -ForegroundColor Red
+        exit 1
+    }
+
+    # Chờ SQL Server sẵn sàng
+    Write-Host ">> Đang kiểm tra trạng thái SQL Server..." -ForegroundColor Cyan
+    $isHealthy = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        $status = docker inspect -f "{{.State.Health.Status}}" livingdocs-mssql 2>&1
+        if ($status -eq "healthy") {
+            $isHealthy = $true
+            break
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    # Kiểm tra database livingdocs đã được khởi tạo chưa
+    if ($isHealthy) {
+        $dbCheck = docker exec livingdocs-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Living_Docs_2026! -C -Q "SET NOCOUNT ON; SELECT DB_ID('livingdocs')" 2>&1
+        if ($dbCheck -match 'NULL' -or $dbCheck -notmatch '\d+') {
+            Write-Host ">> [TỰ ĐỘNG] Database livingdocs chưa tồn tại. Đang khởi tạo (Init + Tenant demo + Seed)..." -ForegroundColor Yellow
+            try {
+                Set-Location $infraDir
+                .\db.ps1 init
+                .\db.ps1 tenant -Code demo -Name "Demo Workspace"
+                .\db.ps1 seed -Code demo
+                Write-Host ">> [OK] Khởi tạo Database thành công!" -ForegroundColor Green
+            } catch {
+                Write-Host ">> [CẢNH BÁO] Không thể tự động seed DB: $_" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host ">> [OK] Database livingdocs đã sẵn sàng!" -ForegroundColor Green
+        }
+    }
+
+    Write-Host "`n[3/4] Đang đóng gói và khởi động các containers trong Docker (Profile: full)..." -ForegroundColor Yellow
+    docker compose --env-file $envFile -f $composeFile --profile full up -d --build
     if ($LASTEXITCODE -ne 0) {
         Write-Host ">> [LỖI] docker compose up gặp sự cố!" -ForegroundColor Red
         exit 1
@@ -56,7 +116,11 @@ if ($Docker) {
     Write-Host ">> [OK] Toàn bộ container đã được khởi chạy trong nền!" -ForegroundColor Green
 
     if (-not $NoFrontend) {
-        Write-Host "`n[3/3] Đang mở Frontend Web..." -ForegroundColor Yellow
+        Write-Host "`n[4/4] Đang mở Frontend Web..." -ForegroundColor Yellow
+        if (-not (Test-Path "$frontendDir\node_modules")) {
+            Write-Host ">> Đang cài đặt thư viện frontend..." -ForegroundColor Cyan
+            npm --prefix $frontendDir install
+        }
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '[LivingDocs] Frontend (:5173)'; Set-Location '$frontendDir'; npm run dev"
     }
 
@@ -69,7 +133,10 @@ if ($Docker) {
     Write-Host "   - Notification Swagger: http://localhost:8086/swagger-ui.html" -ForegroundColor White
     Write-Host "   - Governance Swagger: http://localhost:8085/swagger-ui.html" -ForegroundColor White
     Write-Host "   - AI Engine Docs:     http://localhost:8090/docs" -ForegroundColor White
-    Start-Process "http://localhost:5173"
+    if (-not $NoFrontend) {
+        Start-Sleep -Seconds 3
+        Start-Process "http://localhost:5173"
+    }
     exit 0
 }
 
@@ -100,7 +167,7 @@ try {
     .\db.ps1 up
 } catch {
     Write-Host ">> [CẢNH BÁO] Không thể bật container hạ tầng qua db.ps1. Đang thử chạy docker compose..." -ForegroundColor Yellow
-    docker compose -f $composeFile up -d mssql redis kafka
+    docker compose --env-file $envFile -f $composeFile up -d mssql redis kafka
 }
 
 # Bước 2.3: Định nghĩa danh sách các service cần chạy

@@ -3,6 +3,8 @@
  */
 export const ROUTES = {
   HOME: '/',
+  LOGIN: '/login',
+  AUTH_CALLBACK: '/auth/callback',
   DOCUMENTS: '/documents',
   DOCUMENT_DETAIL: (id = ':id') => `/documents/${id}`,
   DOCUMENT_EDIT: (id = ':id') => `/documents/${id}/edit`,

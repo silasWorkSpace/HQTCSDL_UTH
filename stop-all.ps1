@@ -24,6 +24,7 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 $root = $PSScriptRoot
 $composeFile = Join-Path $root "backend\infra\docker\docker-compose.yml"
+$envFile = Join-Path $root "backend\infra\docker\.env"
 
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "   🛑 LIVINGDOCS - DỪNG TẤT CẢ DỊCH VỤ                           " -ForegroundColor Cyan
@@ -68,7 +69,11 @@ if ($stoppedCount -eq 0) {
 # 2. Tắt Docker containers nếu được yêu cầu
 if ($Docker -or $All) {
     Write-Host "`n[2/2] Đang dừng Docker containers..." -ForegroundColor Yellow
-    docker compose -f $composeFile down
+    if (Test-Path $envFile) {
+        docker compose --env-file $envFile -f $composeFile down
+    } else {
+        docker compose -f $composeFile down
+    }
     Write-Host ">> [OK] Đã dừng các containers Docker." -ForegroundColor Green
 } else {
     Write-Host "`n[2/2] Giữ lại Docker infra (SQL Server, Redis, Kafka) để dùng tiếp." -ForegroundColor DarkGray

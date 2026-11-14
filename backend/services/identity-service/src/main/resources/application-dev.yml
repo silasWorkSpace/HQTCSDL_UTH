@@ -6,3 +6,9 @@ spring:
 livingdocs:
   security:
     jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
+
+github:
+  client-id: ${GITHUB_CLIENT_ID:Ov23li9rUCQkCEAjgiFK}
+  client-secret: ${GITHUB_CLIENT_SECRET:c62e96046bf35701499c589393c5b529921f660b}
+  redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:5173/auth/callback}
+  scope: ${GITHUB_SCOPE:read:user,user:email,repo}
