@@ -12,6 +12,14 @@ import VersionDiffPage from '../features/documents/pages/VersionDiffPage';
 import TemplateListPage from '../features/templates/pages/TemplateListPage';
 import TemplateEditorPage from '../features/templates/pages/TemplateEditorPage';
 
+// Review Feature Pages (WF-01 to WF-22)
+import ReviewQueuePage from '../features/reviews/ReviewQueuePage';
+import ReviewPage from '../features/reviews/ReviewPage';
+
+// Suggestion & Drift Feature Pages (DR-01 to DR-12, AUTO-01 to AUTO-09)
+import SuggestionQueuePage from '../features/suggestions/SuggestionQueuePage';
+import DriftHistoryPage from '../features/suggestions/DriftHistoryPage';
+
 export function AppRoutes({ activeRole }) {
   return (
     <Routes>
@@ -26,6 +34,15 @@ export function AppRoutes({ activeRole }) {
       {/* Template Routes */}
       <Route path={ROUTES.TEMPLATES} element={<TemplateListPage activeRole={activeRole} />} />
       <Route path="/templates/:id/edit" element={<TemplateEditorPage activeRole={activeRole} />} />
+
+      {/* Review Workflow Routes */}
+      <Route path={ROUTES.REVIEWS} element={<ReviewQueuePage activeRole={activeRole} />} />
+      <Route path="/reviews/:taskId" element={<ReviewPage activeRole={activeRole} />} />
+
+      {/* Suggestion & Drift Routes */}
+      <Route path={ROUTES.SUGGESTIONS} element={<SuggestionQueuePage activeRole={activeRole} />} />
+      <Route path="/drift-history" element={<DriftHistoryPage activeRole={activeRole} />} />
+      <Route path="/documents/:id/drift" element={<DriftHistoryPage activeRole={activeRole} />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to={ROUTES.DOCUMENTS} replace />} />

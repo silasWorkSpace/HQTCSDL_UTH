@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FileText, FileCode2, Globe, UserCheck, Shield } from 'lucide-react';
+import { FileText, FileCode2, Globe, UserCheck, Shield, CheckSquare, GitPullRequest } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import './styles/livingdocs.css';
 
@@ -13,6 +13,14 @@ import VersionDiffPage from './features/documents/pages/VersionDiffPage';
 // Template Feature Pages
 import TemplateListPage from './features/templates/pages/TemplateListPage';
 import TemplateEditorPage from './features/templates/pages/TemplateEditorPage';
+
+// Review Feature Pages (WF-01 to WF-22)
+import ReviewQueuePage from './features/reviews/ReviewQueuePage';
+import ReviewPage from './features/reviews/ReviewPage';
+
+// Suggestion & Drift Feature Pages (DR-01 to DR-12, AUTO-01 to AUTO-09)
+import SuggestionQueuePage from './features/suggestions/SuggestionQueuePage';
+import DriftHistoryPage from './features/suggestions/DriftHistoryPage';
 
 const SYSTEM_ROLES = ['Developer', 'Technical Lead', 'Staff', 'Manager', 'Administrator'];
 
@@ -92,6 +100,26 @@ function TopNavigation({ activeRole, onRoleChange }) {
                 {t('nav.templates')}
               </Link>
             )}
+
+            {(activeRole === 'Staff' || activeRole === 'Manager' || activeRole === 'Administrator') && (
+              <Link
+                to="/reviews"
+                className="ld-btn ld-btn-ghost"
+                style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}
+              >
+                <CheckSquare size={15} />
+                {t('reviews.menu') || 'Hàng đợi duyệt'}
+              </Link>
+            )}
+
+            <Link
+              to="/suggestions"
+              className="ld-btn ld-btn-ghost"
+              style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}
+            >
+              <GitPullRequest size={15} />
+              {t('suggestions.menu.queue') || 'Gợi ý Drift'}
+            </Link>
           </nav>
         </div>
 
@@ -257,13 +285,26 @@ function AccessDenied() {
 }
 
 export default function App() {
-  const [userRole, setUserRole] = useState('Developer');
+  const [userRole, setUserRole] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ld_role') || 'Developer';
+    }
+    return 'Developer';
+  });
+
+  const handleRoleChange = (role) => {
+    setUserRole(role);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ld_role', role);
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
 
   return (
     <I18nProvider>
       <BrowserRouter>
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <TopNavigation activeRole={userRole} onRoleChange={setUserRole} />
+          <TopNavigation activeRole={userRole} onRoleChange={handleRoleChange} />
 
           <main style={{ flex: 1 }}>
             <Routes>
@@ -342,6 +383,15 @@ export default function App() {
                 path="/templates/:id"
                 element={<TemplateEditorWrapper userRole={userRole} />}
               />
+
+              {/* Review Workflow module (WF-01 to WF-22) */}
+              <Route path="/reviews" element={<ReviewQueuePage />} />
+              <Route path="/reviews/:taskId" element={<ReviewPage />} />
+
+              {/* Suggestion & Drift module (AUTO-01 to AUTO-09, DR-01 to DR-12) */}
+              <Route path="/suggestions" element={<SuggestionQueuePage />} />
+              <Route path="/drift-history" element={<DriftHistoryPage />} />
+              <Route path="/documents/:id/drift" element={<DriftHistoryPage />} />
 
               <Route path="*" element={<AccessDenied />} />
             </Routes>
