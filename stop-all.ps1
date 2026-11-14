@@ -9,7 +9,7 @@
   - 8084 (Workflow Service)
   - 8085 (Governance Service)
   - 8086 (Notification Service)
-  - 8000 (AI Engine)
+  - 8090 (AI Engine)
   - 5173 (Frontend)
   Nếu truyền thêm -Docker hoặc -All, script sẽ tắt luôn cả Docker containers.
 .EXAMPLE
@@ -36,7 +36,8 @@ $servicePorts = @(
     @{ Port = 8084; Name = "Workflow Service" },
     @{ Port = 8085; Name = "Governance Service" },
     @{ Port = 8086; Name = "Notification Service" },
-    @{ Port = 8000; Name = "AI Engine" },
+    @{ Port = 8090; Name = "AI Engine" },
+    @{ Port = 8000; Name = "AI Engine (Fallback Port)" },
     @{ Port = 5173; Name = "Frontend Vite" }
 )
 

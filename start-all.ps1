@@ -38,7 +38,16 @@ Write-Host "=================================================================" -
 # 1. NẾU CHỌN CHẾ ĐỘ DOCKER FULL (-Docker)
 # ------------------------------------------------------------------------------
 if ($Docker) {
-    Write-Host "`n[1/2] Đang khởi động toàn bộ services trong Docker Compose (Profile: full)..." -ForegroundColor Yellow
+    Write-Host "`n[1/3] Kiểm tra và biên dịch nhanh JARs trên máy host (tận dụng cache .m2 cực nhanh)..." -ForegroundColor Yellow
+    cd $backendDir
+    .\mvnw.cmd package -DskipTests -q
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ">> [LỖI] Không thể biên dịch backend JARs!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host ">> [OK] Đã biên dịch toàn bộ JARs thành công!" -ForegroundColor Green
+
+    Write-Host "`n[2/3] Đang đóng gói và khởi động các containers trong Docker (Profile: full)..." -ForegroundColor Yellow
     docker compose -f $composeFile --profile full up -d --build
     if ($LASTEXITCODE -ne 0) {
         Write-Host ">> [LỖI] docker compose up gặp sự cố!" -ForegroundColor Red
@@ -47,7 +56,7 @@ if ($Docker) {
     Write-Host ">> [OK] Toàn bộ container đã được khởi chạy trong nền!" -ForegroundColor Green
 
     if (-not $NoFrontend) {
-        Write-Host "`n[2/2] Đang mở Frontend Web..." -ForegroundColor Yellow
+        Write-Host "`n[3/3] Đang mở Frontend Web..." -ForegroundColor Yellow
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '[LivingDocs] Frontend (:5173)'; Set-Location '$frontendDir'; npm run dev"
     }
 
@@ -58,7 +67,8 @@ if ($Docker) {
     Write-Host "   - Document Swagger:   http://localhost:8083/swagger-ui.html" -ForegroundColor White
     Write-Host "   - Workflow Swagger:   http://localhost:8084/swagger-ui.html" -ForegroundColor White
     Write-Host "   - Notification Swagger: http://localhost:8086/swagger-ui.html" -ForegroundColor White
-    Write-Host "   - AI Engine Docs:     http://localhost:8000/docs" -ForegroundColor White
+    Write-Host "   - Governance Swagger: http://localhost:8085/swagger-ui.html" -ForegroundColor White
+    Write-Host "   - AI Engine Docs:     http://localhost:8090/docs" -ForegroundColor White
     Start-Process "http://localhost:5173"
     exit 0
 }
@@ -69,7 +79,7 @@ if ($Docker) {
 
 # Bước 2.1: Dọn dẹp các tiến trình cũ nếu còn treo trên các cổng
 Write-Host "`n[1/4] Kiểm tra và giải phóng các port nếu đang bị chiếm dụng..." -ForegroundColor Yellow
-$ports = @(8081, 8082, 8083, 8084, 8085, 8086, 8000, 5173)
+$ports = @(8081, 8082, 8083, 8084, 8085, 8086, 8090, 8000, 5173)
 foreach ($p in $ports) {
     $conns = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue
     if ($conns) {
@@ -124,6 +134,13 @@ $services = @(
         Icon = "⚡"
     },
     @{
+        Name = "Governance Service"
+        Port = 8085
+        Dir  = $backendDir
+        Cmd  = ".\mvnw.cmd spring-boot:run -pl services/governance-service"
+        Icon = "📋"
+    },
+    @{
         Name = "Notification Service"
         Port = 8086
         Dir  = $backendDir
@@ -132,9 +149,9 @@ $services = @(
     },
     @{
         Name = "AI Engine"
-        Port = 8000
+        Port = 8090
         Dir  = $aiDir
-        Cmd  = "& ..\..\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload"
+        Cmd  = "& ..\..\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8090 --reload"
         Icon = "🧠"
     }
 )
@@ -188,8 +205,9 @@ Write-Host "   🔑 Identity Swagger:     http://localhost:8081/swagger-ui.html"
 Write-Host "   🔌 Integration Swagger:  http://localhost:8082/swagger-ui.html" -ForegroundColor White
 Write-Host "   📄 Document Swagger:     http://localhost:8083/swagger-ui.html" -ForegroundColor White
 Write-Host "   ⚡ Workflow Swagger:     http://localhost:8084/swagger-ui.html" -ForegroundColor White
+Write-Host "   📋 Governance Swagger:   http://localhost:8085/swagger-ui.html" -ForegroundColor White
 Write-Host "   🔔 Notification Swagger: http://localhost:8086/swagger-ui.html" -ForegroundColor White
-Write-Host "   🧠 AI Engine Docs:       http://localhost:8000/docs" -ForegroundColor White
+Write-Host "   🧠 AI Engine Docs:       http://localhost:8090/docs" -ForegroundColor White
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "   💡 Mẹo: Khi muốn tắt tất cả các service, chỉ cần gõ: .\stop-all.ps1" -ForegroundColor Yellow
 

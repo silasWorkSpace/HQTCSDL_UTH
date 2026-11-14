@@ -70,8 +70,8 @@ services:
   identity-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/identity-service/Dockerfile
+      context: ../../services/identity-service
+      dockerfile: Dockerfile
     container_name: livingdocs-identity
     environment:
       SPRING_PROFILES_ACTIVE: dev
@@ -91,8 +91,8 @@ services:
   integration-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/integration-service/Dockerfile
+      context: ../../services/integration-service
+      dockerfile: Dockerfile
     container_name: livingdocs-integration
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
@@ -114,8 +114,8 @@ services:
   document-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/document-service/Dockerfile
+      context: ../../services/document-service
+      dockerfile: Dockerfile
     container_name: livingdocs-document
     environment:
       DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
@@ -134,8 +134,8 @@ services:
   workflow-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/workflow-service/Dockerfile
+      context: ../../services/workflow-service
+      dockerfile: Dockerfile
     container_name: livingdocs-workflow
     environment:
       DB_HOST: mssql
@@ -155,8 +155,8 @@ services:
   governance-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/governance-service/Dockerfile
+      context: ../../services/governance-service
+      dockerfile: Dockerfile
     container_name: livingdocs-governance
     environment:
       DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
@@ -172,8 +172,8 @@ services:
   notification-service:
     profiles: ["full"]
     build:
-      context: ../..
-      dockerfile: services/notification-service/Dockerfile
+      context: ../../services/notification-service
+      dockerfile: Dockerfile
     container_name: livingdocs-notification
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
