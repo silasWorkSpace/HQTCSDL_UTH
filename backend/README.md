@@ -29,6 +29,7 @@ backend/
 | **Workflow Service** | `8084` | [http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html) |
 | **Governance Service** | `8085` | [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html) |
 | **Notification Service** | `8086` | [http://localhost:8086/swagger-ui.html](http://localhost:8086/swagger-ui.html) |
+| **AI Engine (FastAPI)** | `8090` | [http://localhost:8090/docs](http://localhost:8090/docs) |
 
 ---
 
