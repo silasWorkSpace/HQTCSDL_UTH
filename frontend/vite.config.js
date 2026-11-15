@@ -5,3 +5,22 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
 })
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api/v1/auth': 'http://localhost:8081',
+      '/api/v1/users': 'http://localhost:8081',
+      '/api/v1/admin': 'http://localhost:8081',
+      '/api': 'http://localhost:8080',
+    },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    css: false,
+  },
+})
