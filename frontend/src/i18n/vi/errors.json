@@ -1,0 +1,17 @@
+{
+  "generic": "Đã có lỗi xảy ra",
+  "network": "Không kết nối được tới máy chủ.",
+  "hint": {
+    "network": "Kiểm tra kết nối mạng hoặc xem backend đã chạy chưa, rồi thử lại.",
+    "validation": "Kiểm tra lại các ô đã nhập.",
+    "unauthorized": "Phiên đăng nhập hết hạn hoặc thông tin chưa đúng. Hãy đăng nhập lại.",
+    "forbidden": "Bạn không đủ quyền. Liên hệ quản trị viên nếu cần.",
+    "notFound": "Không tìm thấy dữ liệu. Có thể nó đã bị xóa.",
+    "conflict": "Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại rồi thử lại.",
+    "server": "Hệ thống đang gặp sự cố. Thử lại sau ít phút.",
+    "unknown": "Hãy thử lại, nếu vẫn lỗi thì báo cho nhóm phát triển."
+  },
+  "forbidden": { "title": "Không đủ quyền", "subtitle": "Bạn không có quyền xem trang này." },
+  "notFound": { "title": "Không tìm thấy trang", "subtitle": "Đường dẫn không tồn tại." },
+  "backHome": "Về trang chủ"
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Notifications",
+  "subtitle": "Events that need your attention.",
+  "filter": { "all": "All", "unread": "Unread" },
+  "columns": { "content": "Content", "time": "Time", "status": "Status", "actions": "Actions" },
+  "unread": "Unread",
+  "read": "Read",
+  "markRead": "Mark as read",
+  "empty": "You have no notifications",
+  "emptyUnread": "No unread notifications left"
+}

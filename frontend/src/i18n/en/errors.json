@@ -1,0 +1,17 @@
+{
+  "generic": "Something went wrong",
+  "network": "Cannot reach the server.",
+  "hint": {
+    "network": "Check your connection or whether the backend is running, then try again.",
+    "validation": "Check the fields you entered.",
+    "unauthorized": "Your session expired or the credentials are wrong. Please log in again.",
+    "forbidden": "You do not have permission. Contact an administrator if needed.",
+    "notFound": "The data was not found. It may have been deleted.",
+    "conflict": "The data is duplicated or has changed. Reload and try again.",
+    "server": "The system has a problem. Try again in a few minutes.",
+    "unknown": "Try again. If it still fails, tell the development team."
+  },
+  "forbidden": { "title": "Access denied", "subtitle": "You do not have permission to view this page." },
+  "notFound": { "title": "Page not found", "subtitle": "This address does not exist." },
+  "backHome": "Back to home"
+}

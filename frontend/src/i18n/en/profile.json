@@ -1,0 +1,6 @@
+{
+  "title": "Profile",
+  "subtitle": "Your account information.",
+  "fields": { "displayName": "Display name", "email": "Email", "workspace": "Workspace", "roles": "Roles", "status": "Status", "language": "Interface language", "id": "User ID" },
+  "note": "Profile editing will be available when the backend supports it."
+}

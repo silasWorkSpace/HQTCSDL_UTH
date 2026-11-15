@@ -1,0 +1,11 @@
+{
+  "title": "Thông báo",
+  "subtitle": "Các sự kiện cần bạn chú ý.",
+  "filter": { "all": "Tất cả", "unread": "Chưa đọc" },
+  "columns": { "content": "Nội dung", "time": "Thời gian", "status": "Trạng thái", "actions": "Thao tác" },
+  "unread": "Chưa đọc",
+  "read": "Đã đọc",
+  "markRead": "Đánh dấu đã đọc",
+  "empty": "Bạn không có thông báo nào",
+  "emptyUnread": "Không còn thông báo chưa đọc"
+}

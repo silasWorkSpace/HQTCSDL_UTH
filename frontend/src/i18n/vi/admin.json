@@ -1,0 +1,19 @@
+{
+  "users": {
+    "title": "Người dùng và vai trò",
+    "subtitle": "Gán vai trò và khóa tài khoản trong workspace.",
+    "columns": { "email": "Email", "displayName": "Tên hiển thị", "status": "Trạng thái", "roles": "Vai trò", "actions": "Thao tác" },
+    "status": { "active": "Hoạt động", "locked": "Bị khóa", "disabled": "Vô hiệu" },
+    "editRoles": "Đổi vai trò",
+    "rolesDialogTitle": "Đổi vai trò của {{email}}",
+    "rolesHint": "Chọn các vai trò áp dụng cho cả workspace.",
+    "rolesUpdated": "Đã cập nhật vai trò",
+    "lock": "Khóa",
+    "unlock": "Mở khóa",
+    "lockConfirm": "Khóa tài khoản này? Người dùng sẽ không đăng nhập được.",
+    "unlockConfirm": "Mở khóa tài khoản này?",
+    "statusUpdated": "Đã cập nhật trạng thái",
+    "cannotSelf": "Không thể tự khóa chính mình",
+    "empty": "Chưa có người dùng nào"
+  }
+}

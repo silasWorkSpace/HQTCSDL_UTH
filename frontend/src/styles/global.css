@@ -1,0 +1,54 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.auth-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: #f5f7fa;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.app-brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 16px;
+  background: #fff;
+}
+
+.app-content {
+  padding: 24px;
+  min-height: 280px;
+}
+
+.page-header {
+  margin-bottom: 16px;
+}

@@ -1,0 +1,5 @@
+{
+  "welcome": "Xin chào, {{name}}",
+  "subtitle": "Chọn chức năng bạn cần. Danh sách phụ thuộc vào vai trò của bạn.",
+  "noFeatures": "Vai trò của bạn chưa có chức năng nào trong phiên bản này."
+}

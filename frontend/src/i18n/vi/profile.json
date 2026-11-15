@@ -1,0 +1,6 @@
+{
+  "title": "Hồ sơ",
+  "subtitle": "Thông tin tài khoản của bạn.",
+  "fields": { "displayName": "Tên hiển thị", "email": "Email", "workspace": "Workspace", "roles": "Vai trò", "status": "Trạng thái", "language": "Ngôn ngữ giao diện", "id": "Mã người dùng" },
+  "note": "Chỉnh sửa hồ sơ sẽ có khi backend hỗ trợ."
+}

@@ -1,0 +1,5 @@
+{
+  "welcome": "Hello, {{name}}",
+  "subtitle": "Pick the feature you need. The list depends on your role.",
+  "noFeatures": "Your role has no features in this version yet."
+}

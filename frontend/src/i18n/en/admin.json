@@ -1,0 +1,19 @@
+{
+  "users": {
+    "title": "Users and roles",
+    "subtitle": "Assign roles and lock accounts in the workspace.",
+    "columns": { "email": "Email", "displayName": "Display name", "status": "Status", "roles": "Roles", "actions": "Actions" },
+    "status": { "active": "Active", "locked": "Locked", "disabled": "Disabled" },
+    "editRoles": "Change roles",
+    "rolesDialogTitle": "Change roles of {{email}}",
+    "rolesHint": "Choose the roles that apply to the whole workspace.",
+    "rolesUpdated": "Roles updated",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "lockConfirm": "Lock this account? The user will not be able to log in.",
+    "unlockConfirm": "Unlock this account?",
+    "statusUpdated": "Status updated",
+    "cannotSelf": "You cannot lock yourself",
+    "empty": "No users yet"
+  }
+}

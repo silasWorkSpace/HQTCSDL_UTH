@@ -1,0 +1,22 @@
+{
+  "appName": "LivingDocs",
+  "actions": {
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "retry": "Thử lại",
+    "logout": "Đăng xuất",
+    "confirm": "Xác nhận",
+    "next": "Trang sau",
+    "previous": "Trang trước"
+  },
+  "language": "Ngôn ngữ",
+  "workspace": "Workspace",
+  "empty": "Chưa có dữ liệu",
+  "role": {
+    "Developer": "Developer",
+    "Staff": "Staff",
+    "Manager": "Manager",
+    "TechLead": "Technical Lead",
+    "Administrator": "Administrator"
+  }
+}
