@@ -19,6 +19,18 @@ export default defineConfig({
         target: 'http://localhost:8081',
         changeOrigin: true,
       },
+      '/api/v1/users': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+      },
+      '/api/v1/integrations': {
+        target: 'http://localhost:8082',
+        changeOrigin: true,
+      },
+      '/api/v1/analysis-runs': {
+        target: 'http://localhost:8082',
+        changeOrigin: true,
+      },
       '/api/v1/repositories': {
         target: 'http://localhost:8082',
         changeOrigin: true,
@@ -29,6 +41,10 @@ export default defineConfig({
       },
       // Cảnh báo drift của tài liệu do workflow-service phục vụ
       '^/api/v1/documents/[^/]+/drift-alerts': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+      },
+      '^/api/v1/documents/[^/]+/submit$': {
         target: 'http://localhost:8084',
         changeOrigin: true,
       },
@@ -45,6 +61,14 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/api/v1/governance': {
+        target: 'http://localhost:8085',
+        changeOrigin: true,
+      },
+      '/api/v1/templates': {
+        target: 'http://localhost:8085',
+        changeOrigin: true,
+      },
+      '/api/v1/collections': {
         target: 'http://localhost:8085',
         changeOrigin: true,
       },

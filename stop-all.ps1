@@ -1,83 +1,72 @@
 ﻿<#
 .SYNOPSIS
-  Tắt sạch toàn bộ các Services của LivingDocs chỉ với 1 lệnh duy nhất.
-.DESCRIPTION
-  Dừng tất cả các tiến trình đang chiếm port của LivingDocs:
-  - 8081 (Identity Service)
-  - 8082 (Integration Service)
-  - 8083 (Document Service)
-  - 8084 (Workflow Service)
-  - 8085 (Governance Service)
-  - 8086 (Notification Service)
-  - 8090 (AI Engine)
-  - 5173 (Frontend)
-  Nếu truyền thêm -Docker hoặc -All, script sẽ tắt luôn cả Docker containers.
+  Dừng các cửa sổ service do start-all.ps1 tạo; tùy chọn dừng Docker containers.
 .EXAMPLE
   .\stop-all.ps1
   .\stop-all.ps1 -Docker
 #>
+[CmdletBinding()]
 param(
     [switch]$Docker,
     [switch]$All
 )
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$composeFile = Join-Path $root "backend\infra\docker\docker-compose.yml"
-$envFile = Join-Path $root "backend\infra\docker\.env"
+$stateFile = Join-Path $root 'backend\.local-run\start-all.json'
+$composeFile = Join-Path $root 'backend\infra\docker\docker-compose.yml'
+$envFile = Join-Path $root 'backend\infra\docker\.env'
+$envExample = Join-Path $root 'backend\infra\docker\.env.example'
 
-Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "   🛑 LIVINGDOCS - DỪNG TẤT CẢ DỊCH VỤ                           " -ForegroundColor Cyan
-Write-Host "=================================================================" -ForegroundColor Cyan
+if (Test-Path -LiteralPath $stateFile) {
+    $state = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
+    $remaining = [System.Collections.Generic.List[object]]::new()
 
-$servicePorts = @(
-    @{ Port = 8081; Name = "Identity Service" },
-    @{ Port = 8082; Name = "Integration Service" },
-    @{ Port = 8083; Name = "Document Service" },
-    @{ Port = 8084; Name = "Workflow Service" },
-    @{ Port = 8085; Name = "Governance Service" },
-    @{ Port = 8086; Name = "Notification Service" },
-    @{ Port = 8090; Name = "AI Engine" },
-    @{ Port = 8000; Name = "AI Engine (Fallback Port)" },
-    @{ Port = 5173; Name = "Frontend Vite" }
-)
+    foreach ($service in @($state.services)) {
+        $processId = [int]$service.pid
+        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        if (-not $process) {
+            Write-Host "Đã dừng: $($service.name)" -ForegroundColor DarkGray
+            continue
+        }
 
-Write-Host "`n[1/2] Đang tắt các tiến trình ứng dụng đang chạy..." -ForegroundColor Yellow
-$stoppedCount = 0
+        $expectedStart = [DateTime]::Parse($service.processStartedAt).ToUniversalTime()
+        $actualStart = $process.StartTime.ToUniversalTime()
+        if ([Math]::Abs(($actualStart - $expectedStart).TotalSeconds) -gt 30) {
+            Write-Host "Bỏ qua PID $processId vì process hiện tại không khớp lần chạy LivingDocs đã ghi." -ForegroundColor Yellow
+            $remaining.Add($service)
+            continue
+        }
 
-foreach ($svc in $servicePorts) {
-    $p = $svc.Port
-    $conns = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue
-    if ($conns) {
-        $pids = $conns.OwningProcess | Select-Object -Unique
-        foreach ($procId in $pids) {
-            if ($procId -gt 0) {
-                Write-Host "   -> Đang dừng $($svc.Name) (Port $p, PID $procId)..." -ForegroundColor White
-                Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-                $stoppedCount++
-            }
+        & taskkill.exe /PID $processId /T /F | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Đã dừng: $($service.name) (PID $processId và process con)" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Không dừng được PID $processId. Có thể cửa sổ đã tự thoát." -ForegroundColor Yellow
         }
     }
-}
 
-if ($stoppedCount -eq 0) {
-    Write-Host ">> Không có tiến trình cục bộ nào đang chạy trên các cổng dịch vụ." -ForegroundColor DarkGray
-} else {
-    Write-Host ">> [OK] Đã tắt thành công $stoppedCount tiến trình." -ForegroundColor Green
-}
-
-# 2. Tắt Docker containers nếu được yêu cầu
-if ($Docker -or $All) {
-    Write-Host "`n[2/2] Đang dừng Docker containers..." -ForegroundColor Yellow
-    if (Test-Path $envFile) {
-        docker compose --env-file $envFile -f $composeFile down
-    } else {
-        docker compose -f $composeFile down
+    if ($remaining.Count -eq 0) {
+        Remove-Item -LiteralPath $stateFile -Force
     }
-    Write-Host ">> [OK] Đã dừng các containers Docker." -ForegroundColor Green
-} else {
-    Write-Host "`n[2/2] Giữ lại Docker infra (SQL Server, Redis, Kafka) để dùng tiếp." -ForegroundColor DarkGray
-    Write-Host "      (Nếu muốn tắt cả Docker, hãy chạy: .\stop-all.ps1 -Docker)" -ForegroundColor DarkGray
+    else {
+        $state.services = @($remaining.ToArray())
+        $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $stateFile -Encoding UTF8
+    }
+}
+else {
+    Write-Host 'Không có process local nào được start-all.ps1 ghi nhận; không kill process chỉ dựa trên port.' -ForegroundColor DarkGray
 }
 
-Write-Host "`n✅ ĐÃ DỪNG TOÀN BỘ CÁC SERVICE THÀNH CÔNG!" -ForegroundColor Green
+if ($Docker -or $All) {
+    if (-not (Test-Path -LiteralPath $envFile)) {
+        throw "Không tìm thấy $envFile để dừng Docker Compose."
+    }
+    & docker compose --env-file $envExample --env-file $envFile -f $composeFile down
+    if ($LASTEXITCODE -ne 0) { throw 'docker compose down thất bại.' }
+    Write-Host 'Đã dừng Docker containers (volume dữ liệu được giữ nguyên).' -ForegroundColor Green
+}
+else {
+    Write-Host 'Docker infra vẫn chạy để lần test sau khởi động nhanh hơn. Dùng .\stop-all.ps1 -Docker để dừng containers.' -ForegroundColor DarkGray
+}

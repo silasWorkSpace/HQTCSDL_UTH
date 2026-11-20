@@ -40,8 +40,8 @@ public class AiResultsConsumer {
             JsonNode payload = EnvelopeCodec.payloadOf(record.value());
             driftService.onDriftFound(envelope.tenant(), payload);
         } catch (Exception e) {
-            // Không ném lại: ack message, ghi log để xem thủ công (DLQ ở mức AI job)
             log.error("Xu ly DRIFT_FOUND that bai offset={} value={}", record.offset(), record.value(), e);
+            throw new IllegalStateException("DRIFT_FOUND processing failed; allow Kafka redelivery", e);
         }
     }
 }

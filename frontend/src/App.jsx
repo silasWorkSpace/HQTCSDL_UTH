@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
-import { FileText, FileCode2, Globe, UserCheck, Shield, CheckSquare, GitPullRequest, LogIn } from 'lucide-react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { FileText, Globe, UserCheck, Shield, CheckSquare, LogIn } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import './styles/livingdocs.css';
 
 // Auth Feature Pages (FR-AUTH-02)
 import LoginPage from './features/auth/pages/LoginPage';
 import OAuthCallbackPage from './features/auth/pages/OAuthCallbackPage';
+import { useAuth } from './features/auth/useAuth';
+import { authApi } from './features/auth/authApi';
 
 // Document Feature Pages
 import DocumentListPage from './features/documents/pages/DocumentListPage';
@@ -15,8 +17,6 @@ import DraftEditorPage from './features/documents/pages/DraftEditorPage';
 import VersionDiffPage from './features/documents/pages/VersionDiffPage';
 
 // Template Feature Pages
-import TemplateListPage from './features/templates/pages/TemplateListPage';
-import TemplateEditorPage from './features/templates/pages/TemplateEditorPage';
 
 // Review Feature Pages (WF-01 to WF-22)
 import ReviewQueuePage from './features/reviews/ReviewQueuePage';
@@ -26,10 +26,23 @@ import ReviewPage from './features/reviews/ReviewPage';
 import SuggestionQueuePage from './features/suggestions/SuggestionQueuePage';
 import DriftHistoryPage from './features/suggestions/DriftHistoryPage';
 
-const SYSTEM_ROLES = ['Developer', 'Technical Lead', 'Staff', 'Manager', 'Administrator'];
-
-function TopNavigation({ activeRole, onRoleChange }) {
+function TopNavigation({ activeRole }) {
   const { t, lang, setLang } = useI18n();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Local navigation still clears workspace-specific UI state below.
+    } finally {
+      localStorage.removeItem('ld_token');
+      localStorage.removeItem('ld_refresh_token');
+      localStorage.removeItem('ld_github_connection_id');
+      window.dispatchEvent(new Event('livingdocs:session-changed'));
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <header
@@ -94,17 +107,6 @@ function TopNavigation({ activeRole, onRoleChange }) {
               {t('nav.documents')}
             </Link>
 
-            {activeRole !== 'Administrator' && (
-              <Link
-                to="/templates"
-                className="ld-btn ld-btn-ghost"
-                style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}
-              >
-                <FileCode2 size={15} />
-                {t('nav.templates')}
-              </Link>
-            )}
-
             {(activeRole === 'Staff' || activeRole === 'Manager' || activeRole === 'Administrator') && (
               <Link
                 to="/reviews"
@@ -116,14 +118,13 @@ function TopNavigation({ activeRole, onRoleChange }) {
               </Link>
             )}
 
-            <Link
-              to="/suggestions"
-              className="ld-btn ld-btn-ghost"
-              style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}
-            >
-              <GitPullRequest size={15} />
-              {t('suggestions.menu.queue') || 'Gợi ý Drift'}
-            </Link>
+            {(activeRole === 'Developer' || activeRole === 'Administrator') && (
+              <>
+                <Link to="/suggestions" className="ld-btn ld-btn-ghost" style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}>Gợi ý drift</Link>
+                <Link to="/drift-history" className="ld-btn ld-btn-ghost" style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}>Lịch sử drift</Link>
+              </>
+            )}
+
           </nav>
         </div>
 
@@ -181,29 +182,13 @@ function TopNavigation({ activeRole, onRoleChange }) {
           >
             <UserCheck size={14} style={{ color: '#2563eb' }} />
             <span style={{ color: '#64748b' }}>{t('nav.userRole')}:</span>
-            <select
-              value={activeRole}
-              onChange={(e) => onRoleChange(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                fontWeight: 600,
-                color: '#0f172a',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {SYSTEM_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+            <strong style={{ color: '#0f172a' }}>{activeRole || 'Chưa đăng nhập'}</strong>
           </div>
 
           {/* Login Button (FR-AUTH-02) */}
-          <Link
-            to="/login"
+          <button
+            type="button"
+            onClick={handleLogout}
             style={{
               padding: '4px 10px',
               fontSize: '12px',
@@ -220,8 +205,8 @@ function TopNavigation({ activeRole, onRoleChange }) {
             }}
           >
             <LogIn size={13} style={{ color: '#2563eb' }} />
-            <span>{t('auth.btnLogin') || 'Đăng nhập'}</span>
-          </Link>
+            <span>Đăng xuất</span>
+          </button>
         </div>
       </div>
     </header>
@@ -280,28 +265,13 @@ function VersionDiffWrapper() {
   );
 }
 
-function TemplateEditorWrapper({ userRole }) {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  return (
-    <TemplateEditorPage
-      templateId={id}
-      isCreate={!id}
-      userRole={userRole}
-      onNavigate={(screen) => {
-        if (screen === 'template-list') navigate('/templates');
-      }}
-    />
-  );
-}
-
 function AccessDenied() {
   return (
     <div style={{ maxWidth: '600px', margin: '80px auto', textAlign: 'center', padding: '32px' }}>
       <Shield size={48} style={{ color: '#dc2626', marginBottom: '16px' }} />
       <h2 style={{ margin: '0 0 8px 0', color: '#991b1b' }}>403 — Không có quyền truy cập</h2>
       <p style={{ color: '#64748b', fontSize: '14px' }}>
-        Tài khoản của bạn không có quyền xem trang này. Vui lòng liên hệ quản trị viên hoặc chuyển đổi vai trò.
+        Tài khoản của bạn không có quyền xem trang này. Vui lòng liên hệ quản trị viên.
       </p>
       <Link to="/documents" className="ld-btn ld-btn-primary" style={{ marginTop: '16px' }}>
         Quay lại trang Tài liệu
@@ -313,25 +283,26 @@ function AccessDenied() {
 function AppContent() {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/auth/callback';
+  const { user, roles, loading: authLoading } = useAuth();
+  const userRole = ['Administrator', 'Manager', 'Staff', 'Technical Lead', 'Developer']
+    .find((role) => roles.includes(role)) || null;
 
-  const [userRole, setUserRole] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ld_role') || 'Developer';
-    }
-    return 'Developer';
-  });
-
-  const handleRoleChange = (role) => {
-    setUserRole(role);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ld_role', role);
-      window.dispatchEvent(new Event('storage'));
-    }
-  };
+  if (!isAuthPage && authLoading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#475569', fontSize: 14 }}
+      >
+        Đang kiểm tra phiên đăng nhập...
+      </div>
+    );
+  }
+  if (!isAuthPage && !user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {!isAuthPage && <TopNavigation activeRole={userRole} onRoleChange={handleRoleChange} />}
+      {!isAuthPage && <TopNavigation activeRole={userRole} />}
 
       <main style={{ flex: 1 }}>
         <Routes>
@@ -340,46 +311,9 @@ function AppContent() {
           <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
           {/* Documents module */}
-              <Route
-                path="/"
-                element={
-                  userRole === 'Administrator' ? (
-                    <AccessDenied />
-                  ) : (
-                    <DocumentListPage
-                      userRole={userRole}
-                      onNavigate={(screen, params) => {
-                        window.location.href = `/documents/${params.id}`;
-                      }}
-                    />
-                  )
-                }
-              />
-              <Route
-                path="/documents"
-                element={
-                  userRole === 'Administrator' ? (
-                    <AccessDenied />
-                  ) : (
-                    <DocumentListPage
-                      userRole={userRole}
-                      onNavigate={(screen, params) => {
-                        window.location.href = `/documents/${params.id}`;
-                      }}
-                    />
-                  )
-                }
-              />
-              <Route
-                path="/documents/:id"
-                element={
-                  userRole === 'Administrator' ? (
-                    <AccessDenied />
-                  ) : (
-                    <DocumentDetailWrapper userRole={userRole} />
-                  )
-                }
-              />
+              <Route path="/" element={<Navigate to="/documents" replace />} />
+              <Route path="/documents" element={<DocumentListPage userRole={userRole} />} />
+              <Route path="/documents/:id" element={<DocumentDetailWrapper userRole={userRole} />} />
               <Route
                 path="/documents/:id/edit"
                 element={<DraftEditorWrapper userRole={userRole} />}
@@ -389,31 +323,8 @@ function AppContent() {
                 element={<VersionDiffWrapper />}
               />
 
-              {/* Templates module */}
-              <Route
-                path="/templates"
-                element={
-                  userRole === 'Administrator' ? (
-                    <AccessDenied />
-                  ) : (
-                    <TemplateListPage
-                      userRole={userRole}
-                      onNavigate={(screen, params) => {
-                        if (screen === 'template-create') window.location.href = '/templates/new';
-                        if (screen === 'template-edit') window.location.href = `/templates/${params.id}`;
-                      }}
-                    />
-                  )
-                }
-              />
-              <Route
-                path="/templates/new"
-                element={<TemplateEditorWrapper userRole={userRole} />}
-              />
-              <Route
-                path="/templates/:id"
-                element={<TemplateEditorWrapper userRole={userRole} />}
-              />
+              {/* Templates remain outside the persisted workflow. */}
+              <Route path="/templates/*" element={<Navigate to="/documents" replace />} />
 
               {/* Review Workflow module (WF-01 to WF-22) */}
               <Route path="/reviews" element={<ReviewQueuePage />} />

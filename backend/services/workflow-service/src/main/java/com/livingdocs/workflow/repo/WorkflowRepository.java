@@ -41,18 +41,32 @@ public class WorkflowRepository {
     /* ---------- đọc document / document_version ---------- */
 
     public record DocumentRow(UUID id, String title, String docStatus, UUID currentVersionId,
-                              UUID ownerId, UUID publishedVersionId) {
+                              UUID ownerId, UUID publishedVersionId, UUID repositoryId, String pathInRepo) {
+        public DocumentRow(UUID id, String title, String docStatus, UUID currentVersionId,
+                           UUID ownerId, UUID publishedVersionId) {
+            this(id, title, docStatus, currentVersionId, ownerId, publishedVersionId, null, null);
+        }
     }
 
     private static final RowMapper<DocumentRow> DOC_MAPPER = (rs, i) -> new DocumentRow(
             rs.getObject("id", UUID.class), rs.getString("title"),
             rs.getString("doc_status"), rs.getObject("current_version_id", UUID.class),
-            rs.getObject("owner_id", UUID.class), rs.getObject("published_version_id", UUID.class));
+            rs.getObject("owner_id", UUID.class), rs.getObject("published_version_id", UUID.class),
+            rs.getObject("repository_id", UUID.class), rs.getString("path_in_repo"));
 
     public Optional<DocumentRow> findDocument(String tenant, UUID documentId) {
-        String sql = "SELECT id, title, doc_status, current_version_id, owner_id, published_version_id "
+        String sql = "SELECT id, title, doc_status, current_version_id, owner_id, published_version_id, repository_id, path_in_repo "
                 + "FROM " + TenantSchema.qualify(tenant, "document") + " WHERE id = ?";
         return jdbc.query(sql, DOC_MAPPER, documentId).stream().findFirst();
+    }
+
+    public void recordDocumentationPullRequest(String tenant, UUID documentId, int pullRequestNumber) {
+        String sql = "UPDATE " + TenantSchema.qualify(tenant, "document")
+                + " SET docs_pr_number = ?, updated_at = SYSUTCDATETIME()"
+                + " WHERE id = ? AND doc_status = 'PENDING_MERGE' AND pr_status = 'PENDING_MERGE'";
+        if (jdbc.update(sql, pullRequestNumber, documentId) != 1) {
+            throw new IllegalStateException("Could not associate documentation PR with pending document");
+        }
     }
 
     public record VersionRow(UUID id, int versionNo, String content, String actorRole,
@@ -115,6 +129,12 @@ public class WorkflowRepository {
     public UUID appendDocumentVersion(String tenant, UUID documentId, String content,
                                       String actorRole, UUID actorUserId, String changeSource,
                                       String reason) {
+        return appendDocumentVersion(tenant, documentId, content, actorRole, actorUserId, changeSource, reason, null);
+    }
+
+    public UUID appendDocumentVersion(String tenant, UUID documentId, String content,
+                                      String actorRole, UUID actorUserId, String changeSource,
+                                      String reason, String sourceCommitSha) {
         Map<String, Object> out = jdbc.call(
                 con -> {
                     CallableStatement cs = con.prepareCall(
@@ -130,7 +150,8 @@ public class WorkflowRepository {
                     }
                     cs.setString(5, changeSource);
                     cs.setNull(6, Types.VARCHAR);         // status_at_version = NULL (lấy hiện tại)
-                    cs.setNull(7, Types.VARCHAR);         // source_commit_sha
+                    if (sourceCommitSha == null) cs.setNull(7, Types.VARCHAR);
+                    else cs.setString(7, sourceCommitSha);
                     cs.setNull(8, Types.INTEGER);         // source_pr_number
                     cs.setNull(9, Types.VARCHAR);         // source_pr_kind
                     cs.setNString(10, reason);
@@ -168,7 +189,7 @@ public class WorkflowRepository {
         return UUID.fromString(s);
     }
 
-        public UUID createDriftAlert(String tenant, UUID sourceEventId, UUID documentId,
+        public DriftAlertInsert createDriftAlert(String tenant, UUID sourceEventId, UUID documentId,
                                  String driftType, String severity,
                                  String evidenceJson, String handlingStatus) {
         String sql = "EXEC " + TenantSchema.qualify(tenant, "sp_create_drift_alert")
@@ -179,10 +200,12 @@ public class WorkflowRepository {
                              severity, evidenceJson, handlingStatus},
                 new int[]{Types.VARCHAR, Types.VARCHAR, Types.VARCHAR,
                           Types.VARCHAR, Types.NVARCHAR, Types.VARCHAR},
-                (rs, i) -> UUID.fromString(rs.getString(1)));
+                (rs, i) -> new DriftAlertInsert(UUID.fromString(rs.getString("id")), rs.getBoolean("created")));
     }
 
-       public UUID createUpdateSuggestion(String tenant, UUID documentId, UUID driftAlertId,
+    public record DriftAlertInsert(UUID id, boolean created) {}
+
+       public SuggestionInsert createUpdateSuggestion(String tenant, UUID documentId, UUID driftAlertId,
                                        String origin, String content, BigDecimal confidence,
                                        String evidenceJson) {
         String sql = "EXEC " + TenantSchema.qualify(tenant, "sp_create_update_suggestion")
@@ -194,8 +217,10 @@ public class WorkflowRepository {
                              origin, content, confidence, evidenceJson, 0},
                 new int[]{Types.VARCHAR, Types.VARCHAR, Types.VARCHAR, Types.NVARCHAR,
                           Types.DECIMAL, Types.NVARCHAR, Types.INTEGER},
-                (rs, i) -> UUID.fromString(rs.getString(1)));
+                (rs, i) -> new SuggestionInsert(UUID.fromString(rs.getString("id")), rs.getBoolean("created")));
     }
+
+    public record SuggestionInsert(UUID id, boolean created) {}
 
     /** Hợp nhất gợi ý cũ (FR-DR-17): trả số dòng bị chuyển sang Superseded. */
     public int supersedeStaleSuggestions(String tenant, UUID documentId, UUID keepSuggestionId) {

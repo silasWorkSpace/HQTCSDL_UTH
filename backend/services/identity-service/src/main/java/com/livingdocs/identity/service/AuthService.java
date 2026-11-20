@@ -23,6 +23,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -37,12 +44,16 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 /** Dang ky, dang nhap, lam moi token, dang xuat (FR-AUTH-01, 02, 05). */
 @Service
 public class AuthService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthService.class);
+    private static final SecureRandom STATE_RANDOM = new SecureRandom();
+    private static final String OAUTH_STATE_PREFIX = "oauth:github:state:";
+    private static final Duration OAUTH_STATE_TTL = Duration.ofMinutes(5);
 
     private final WorkspaceRepository workspaces;
     private final UserRepository users;
@@ -52,11 +63,16 @@ public class AuthService {
     private final AuditService audit;
     private final IdentityProperties props;
     private final GitHubOAuthProperties gitHubProps;
+    private final GitHubLoginProvisioner githubLoginProvisioner;
     private final RestTemplate restTemplate;
+    @Value("${livingdocs.integration.base-url}")
+    private String integrationBaseUrl;
+    @Autowired
+    private StringRedisTemplate redis;
 
     public AuthService(WorkspaceRepository workspaces, UserRepository users, RoleRepository roles,
                        PasswordEncoder encoder, TokenService tokens, AuditService audit, IdentityProperties props,
-                       GitHubOAuthProperties gitHubProps) {
+                       GitHubOAuthProperties gitHubProps, GitHubLoginProvisioner githubLoginProvisioner) {
         this.workspaces = workspaces;
         this.users = users;
         this.roles = roles;
@@ -65,7 +81,13 @@ public class AuthService {
         this.audit = audit;
         this.props = props;
         this.gitHubProps = gitHubProps;
-        this.restTemplate = new RestTemplate();
+        this.githubLoginProvisioner = githubLoginProvisioner;
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.of(5, ChronoUnit.SECONDS));
+        // The GitHub connection callback calls Integration, which may make its own
+        // GitHub API request before returning. Allow that nested request to finish.
+        requestFactory.setReadTimeout(Duration.of(20, ChronoUnit.SECONDS));
+        this.restTemplate = new RestTemplate(requestFactory);
     }
 
     @Transactional
@@ -109,6 +131,9 @@ public class AuthService {
     }
 
     public TokenResponse refresh(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Phiên hết hạn", "Refresh cookie không tồn tại hoặc đã hết hạn.");
+        }
         TokenService.RefreshSession session = tokens.consumeRefreshToken(refreshToken);
         if (session == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Phiên hết hạn", "Refresh token không hợp lệ hoặc đã hết hạn.");
@@ -125,16 +150,30 @@ public class AuthService {
 
     public GitHubAuthUrlResponse getGitHubAuthUrl(String tenant, String redirectUri) {
         String targetTenant = (tenant != null && !tenant.isBlank()) ? tenant : "demo";
-        String targetRedirectUri = (redirectUri != null && !redirectUri.isBlank()) ? redirectUri : gitHubProps.redirectUri();
-        String clientId = gitHubProps.clientId();
-
-        // Neu chua cau hinh GITHUB_CLIENT_ID that (con la placeholder mac dinh)
-        if (clientId == null || clientId.isBlank() || "your-github-client-id".equals(clientId)) {
-            LOG.warn("Chua cau hinh GITHUB_CLIENT_ID hop le (hien tai: '{}'). Tu dong chuyen huong sang mock OAuth callback de tranh loi 404 tu GitHub.", clientId);
-            String separator = targetRedirectUri.contains("?") ? "&" : "?";
-            String mockUrl = targetRedirectUri + separator + "code=mock_github_code_" + targetTenant + "&state=" + URLEncoder.encode(targetTenant, StandardCharsets.UTF_8);
-            return new GitHubAuthUrlResponse(mockUrl);
+        if (!targetTenant.matches("[a-z0-9_]{2,30}")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Workspace không hợp lệ", "Mã workspace không đúng định dạng.");
         }
+        requireActiveWorkspace(targetTenant);
+        String targetRedirectUri = gitHubProps.redirectUri();
+        if (redirectUri != null && !redirectUri.isBlank() && !redirectUri.equals(targetRedirectUri)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Redirect URI không hợp lệ",
+                    "Callback URL phải khớp với cấu hình máy chủ.");
+        }
+        String clientId = gitHubProps.clientId();
+        if (clientId == null || clientId.isBlank() || gitHubProps.clientSecret() == null || gitHubProps.clientSecret().isBlank()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GitHub OAuth chưa được cấu hình",
+                    "Máy chủ chưa có GitHub OAuth credentials hợp lệ.");
+        }
+
+        if (redis == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "OAuth state storage unavailable",
+                    "Không thể khởi tạo phiên OAuth an toàn.");
+        }
+
+        byte[] stateBytes = new byte[32];
+        STATE_RANDOM.nextBytes(stateBytes);
+        String state = Base64.getUrlEncoder().withoutPadding().encodeToString(stateBytes);
+        redis.opsForValue().set(OAUTH_STATE_PREFIX + state, targetTenant, OAUTH_STATE_TTL);
 
         String scope = (gitHubProps.scope() != null && !gitHubProps.scope().isBlank())
                 ? gitHubProps.scope() : "read:user,user:email,repo";
@@ -143,32 +182,27 @@ public class AuthService {
                 + "?client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8)
                 + "&redirect_uri=" + URLEncoder.encode(targetRedirectUri, StandardCharsets.UTF_8)
                 + "&scope=" + URLEncoder.encode(scope, StandardCharsets.UTF_8)
-                + "&state=" + URLEncoder.encode(targetTenant, StandardCharsets.UTF_8);
+                + "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8);
 
         return new GitHubAuthUrlResponse(url);
     }
 
-    @Transactional
     public TokenResponse handleGitHubCallback(GitHubCallbackRequest req) {
-        String tenant = (req.tenant() != null && !req.tenant().isBlank()) ? req.tenant() : "demo";
+        String tenant = consumeOAuthState(req.state());
         requireActiveWorkspace(tenant);
 
-        String targetRedirectUri = (req.redirectUri() != null && !req.redirectUri().isBlank()) ? req.redirectUri() : gitHubProps.redirectUri();
+        String targetRedirectUri = gitHubProps.redirectUri();
+        if (req.redirectUri() != null && !req.redirectUri().isBlank() && !req.redirectUri().equals(targetRedirectUri)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Redirect URI không hợp lệ",
+                    "Callback URL phải khớp với cấu hình máy chủ.");
+        }
 
         long githubId;
         String email;
         String displayName;
         String ghAccessToken;
 
-        // Ho tro mock code cho moi truong dev/test offline hoac khi chua co credentials that
-        if (req.code().startsWith("mock_") || gitHubProps.clientId() == null || gitHubProps.clientId().isBlank()
-                || "your-github-client-id".equals(gitHubProps.clientId())) {
-            LOG.info("Su dung mock GitHub OAuth profile cho code: {}", req.code());
-            githubId = 242319708L;
-            email = "silas@livingdocs.internal";
-            displayName = "silasWorkSpace";
-            ghAccessToken = "mock_gh_access_token_" + tenant;
-        } else {
+        {
             // 1. Goi https://github.com/login/oauth/access_token
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -221,33 +255,36 @@ public class AuthService {
             githubId = ((Number) ghUser.get("id")).longValue();
             String login = (String) ghUser.get("login");
             String name = (String) ghUser.get("name");
-            email = (String) ghUser.get("email");
-
-            // 3. Neu email private thi goi tiep /user/emails
-            if (email == null || email.isBlank()) {
-                try {
-                    ResponseEntity<List> emailResp = restTemplate.exchange(
-                            "https://api.github.com/user/emails", HttpMethod.GET, userEntity, List.class);
-                    List<?> emailsList = emailResp.getBody();
-                    if (emailsList != null) {
-                        for (Object item : emailsList) {
-                            if (item instanceof Map<?, ?> m) {
-                                Boolean isPrimary = (Boolean) m.get("primary");
-                                Boolean isVerified = (Boolean) m.get("verified");
-                                if (Boolean.TRUE.equals(isPrimary) && Boolean.TRUE.equals(isVerified)) {
-                                    email = (String) m.get("email");
-                                    break;
-                                }
-                            }
+            email = null;
+            try {
+                ResponseEntity<List> emailResp = restTemplate.exchange(
+                        "https://api.github.com/user/emails", HttpMethod.GET, userEntity, List.class);
+                List<?> emailsList = emailResp.getBody();
+                int primaryEmailCount = 0;
+                int verifiedEmailCount = 0;
+                int eligibleEmailCount = 0;
+                if (emailsList != null) for (Object item : emailsList) {
+                    if (item instanceof Map<?, ?> m) {
+                        boolean primary = Boolean.TRUE.equals(m.get("primary"));
+                        boolean verified = Boolean.TRUE.equals(m.get("verified"));
+                        if (primary) primaryEmailCount++;
+                        if (verified) verifiedEmailCount++;
+                        if (primary && verified) {
+                            eligibleEmailCount++;
+                            if (email == null) email = (String) m.get("email");
                         }
                     }
-                } catch (Exception e) {
-                    LOG.warn("Khong the lay danh sach email tu GitHub: {}", e.getMessage());
                 }
+                if (email == null || email.isBlank()) {
+                    LOG.warn("GitHub /user/emails returned no primary verified email (entries={}, primary={}, verified={}, primaryVerified={})",
+                            emailsList == null ? 0 : emailsList.size(), primaryEmailCount, verifiedEmailCount, eligibleEmailCount);
+                }
+            } catch (Exception e) {
+                LOG.warn("Không thể xác nhận email GitHub: {}", e.getMessage());
             }
-
             if (email == null || email.isBlank()) {
-                email = login + "@users.noreply.github.com";
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "Email GitHub chưa xác thực",
+                        "Tài khoản GitHub cần có email chính đã xác thực để đăng nhập.");
             }
             displayName = (name != null && !name.isBlank()) ? name.trim() : login;
         }
@@ -257,42 +294,38 @@ public class AuthService {
         final long finalGithubId = githubId;
         final String finalGhAccessToken = ghAccessToken;
 
-        return TenantContext.runWith(tenant, () -> {
-            UserRepository.GithubUserProvisionResult provision = users.findOrProvisionGithubUser(
-                    finalEmail, finalDisplayName, String.valueOf(finalGithubId), finalGithubId);
-            UserRecord user = provision.user();
+        TokenResponse token = githubLoginProvisioner.provision(
+                tenant, finalEmail, finalDisplayName, finalGithubId);
+        String connectionId = createGitHubConnection(token.accessToken(), finalGhAccessToken);
+        return new TokenResponse(
+                token.accessToken(),
+                token.refreshToken(),
+                token.tokenType(),
+                token.expiresIn(),
+                connectionId
+        );
+    }
 
-            if (provision.isNew()) {
-                roles.addWorkspaceRole(user.id(), props.defaultRole(), null);
-                audit.record("user.registered_github", "user", user.id(), props.defaultRole(), "app_user", user.id(),
-                        Map.of("email", finalEmail, "githubId", finalGithubId));
-            } else {
-                audit.record("auth.github_link", "user", user.id(), null, "app_user", user.id(),
-                        Map.of("email", finalEmail, "githubId", finalGithubId));
-            }
-
-            if (!"active".equals(user.status())) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "Tài khoản không khả dụng", "Tài khoản đang bị khóa hoặc vô hiệu hóa.");
-            }
-
-            users.touchLastLogin(user.id());
-            List<String> userRoles = roles.rolesOf(user.id());
-            if (userRoles.isEmpty()) {
-                roles.addWorkspaceRole(user.id(), props.defaultRole(), null);
-                userRoles = List.of(props.defaultRole());
-            }
-
-            audit.record("auth.github_login", "user", user.id(), null, "app_user", user.id(),
-                    Map.of("email", user.email(), "githubId", finalGithubId));
-            TokenResponse token = tokens.issue(tenant, user, userRoles);
-            return new TokenResponse(
-                    token.accessToken(),
-                    token.refreshToken(),
-                    token.tokenType(),
-                    token.expiresIn(),
-                    finalGhAccessToken
-            );
-        });
+    private String createGitHubConnection(String appAccessToken, String githubAccessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(appAccessToken);
+        headers.set("X-GitHub-Token", githubAccessToken);
+        ResponseEntity<Map> response;
+        try {
+            response = restTemplate.postForEntity(
+                    integrationBaseUrl + "/api/v1/integrations/github/connections/oauth",
+                    new HttpEntity<>(null, headers), Map.class);
+        } catch (Exception e) {
+            LOG.error("Could not persist GitHub connection in integration service: {}", e.getMessage());
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Không thể lưu kết nối GitHub",
+                    "Dịch vụ tích hợp GitHub hiện không khả dụng. Vui lòng thử đăng nhập lại.");
+        }
+        Object id = response.getBody() == null ? null : response.getBody().get("id");
+        if (id == null) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "Không thể lưu kết nối GitHub",
+                    "Dịch vụ tích hợp không trả về mã kết nối hợp lệ.");
+        }
+        return id.toString();
     }
 
     /**
@@ -300,12 +333,8 @@ public class AuthService {
      */
     public List<GitHubRepositoryDto> getGitHubRepositories(String token) {
         if (token == null || token.isBlank() || token.startsWith("mock_")) {
-            LOG.info("Tra ve danh sach mock repositories cho offline/dev");
-            return List.of(
-                    new GitHubRepositoryDto(101L, "livingdocs-core", "silas/livingdocs-core", "main", false, "https://github.com/silas/livingdocs-core", "Core platform for LivingDocs"),
-                    new GitHubRepositoryDto(102L, "ecommerce-api", "silas/ecommerce-api", "main", true, "https://github.com/silas/ecommerce-api", "E-commerce Microservices Backend"),
-                    new GitHubRepositoryDto(103L, "tsql-database-hqtcsdl", "silas/tsql-database-hqtcsdl", "master", false, "https://github.com/silas/tsql-database-hqtcsdl", "Database course project")
-            );
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "GitHub token không hợp lệ",
+                    "Cần access token thật từ GitHub OAuth.");
         }
 
         try {
@@ -346,6 +375,19 @@ public class AuthService {
             LOG.error("Loi khi lay danh sach repositories tu GitHub API: {}", e.getMessage());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "Lỗi GitHub API", "Không thể lấy danh sách kho mã nguồn từ GitHub: " + e.getMessage());
         }
+    }
+
+    private String consumeOAuthState(String state) {
+        if (state == null || state.isBlank() || redis == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "OAuth state không hợp lệ",
+                    "Phiên đăng nhập đã hết hạn hoặc không hợp lệ.");
+        }
+        String tenant = redis.opsForValue().getAndDelete(OAUTH_STATE_PREFIX + state);
+        if (tenant == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "OAuth state không hợp lệ",
+                    "Phiên đăng nhập đã hết hạn hoặc đã được sử dụng.");
+        }
+        return tenant;
     }
 
     /** Goi trong request da xac thuc (TenantContext da co tu JWT). */

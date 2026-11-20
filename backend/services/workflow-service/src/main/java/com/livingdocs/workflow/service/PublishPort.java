@@ -3,10 +3,12 @@ package com.livingdocs.workflow.service;
 import java.util.UUID;
 
 /**
- * Cổng đưa bản đã duyệt vào nhánh đích. Tuần này: giả lập ({@link PublishSimulator});
- * tuần sau: implement thật qua GitHub API (commit nhánh docs, mở PR tài liệu).
+ * Writes the approved document to its connected GitHub repository.
  */
 public interface PublishPort {
 
-    UUID publish(String tenant, UUID documentId);
+    record PublicationResult(String commitSha, int pullRequestNumber, String pullRequestUrl, String branchName) {}
+
+    PublicationResult publish(UUID repositoryId, UUID documentId, String pathInRepo, String title,
+                              String content, String bearerToken);
 }

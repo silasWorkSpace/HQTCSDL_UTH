@@ -11,6 +11,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(RepositoryController.class)
+@WebMvcTest(value = RepositoryController.class, properties = "JWT_SECRET=test-only-signing-key-with-at-least-32-characters")
 class RepositoryControllerTest {
 
     @Autowired
@@ -31,6 +33,7 @@ class RepositoryControllerTest {
     private RepositoryManagementService repositoryService;
 
     @Test
+    @WithMockUser(roles = "Developer")
     @DisplayName("GH-05: Liệt kê danh sách repositories trả về HTTP 200")
     void testListRepositories() throws Exception {
         UUID repoId = UUID.randomUUID();
@@ -49,6 +52,7 @@ class RepositoryControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "Developer")
     @DisplayName("GH-04: Ngắt kết nối repository trả về HTTP 204 No Content")
     void testDisconnectRepository() throws Exception {
         UUID repoId = UUID.randomUUID();
@@ -58,5 +62,19 @@ class RepositoryControllerTest {
                 .andExpect(status().isNoContent());
 
         Mockito.verify(repositoryService).disconnectRepository(repoId);
+    }
+
+    @Test
+    @WithMockUser(roles = "TechLead")
+    @DisplayName("Analysis: TechLead role can start a baseline run")
+    void techLeadCanStartAnalysisRun() throws Exception {
+        UUID repoId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Mockito.when(repositoryService.startAnalysisRun(repoId)).thenReturn(runId);
+
+        mockMvc.perform(post("/api/v1/repositories/" + repoId + "/analysis-runs").with(csrf()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.runId").value(runId.toString()))
+                .andExpect(jsonPath("$.status").value("queued"));
     }
 }

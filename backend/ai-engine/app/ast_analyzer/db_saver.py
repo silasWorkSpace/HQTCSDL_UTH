@@ -25,26 +25,29 @@ class CodeEntityDbSaver:
         if not entities:
             return 0
 
-        # Phân nhóm theo thứ tự phân cấp để tránh vi phạm khóa ngoại fk_code_entity_parent
+        # Sắp xếp phân cấp đảm bảo cha luôn được insert trước con (tránh vi phạm fk_code_entity_parent)
         classes = [e for e in entities if e.kind == "class"]
+        top_classes = [c for c in classes if not c.parent_id]
+        nested_classes = [c for c in classes if c.parent_id]
         methods = [e for e in entities if e.kind == "method"]
         others = [e for e in entities if e.kind in ("endpoint", "parameter")]
 
-        ordered = classes + methods + others
+        ordered = top_classes + nested_classes + methods + others
         count = 0
+
+        # Tập hợp các ID trong batch hiện tại
+        persisted_ids = {e.id for e in ordered}
 
         insert_sql = f"""
         MERGE [{tenant_schema}].[code_entity] AS target
-        USING (SELECT ? AS id, ? AS repository_id, ? AS parent_id, ? AS kind,
-                      ? AS name, ? AS signature, ? AS file_path, ? AS commit_hash) AS source
-        ON (target.repository_id = source.repository_id 
-            AND target.file_path = source.file_path 
-            AND target.commit_hash = source.commit_hash 
-            AND target.name = source.name 
-            AND target.kind = source.kind)
+        USING (SELECT %s AS id, %s AS repository_id, %s AS parent_id, %s AS kind,
+                      %s AS name, %s AS signature, %s AS file_path, %s AS commit_hash) AS source
+        ON (target.id = source.id)
         WHEN MATCHED THEN
             UPDATE SET target.signature = source.signature,
                        target.parent_id = source.parent_id,
+                       target.name = source.name,
+                       target.kind = source.kind,
                        target.updated_at = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN
             INSERT (id, repository_id, parent_id, kind, name, signature, file_path, commit_hash)
@@ -54,16 +57,38 @@ class CodeEntityDbSaver:
 
         if cursor is not None:
             for item in ordered:
+                parent_id = item.parent_id
+                if parent_id and parent_id not in persisted_ids:
+                    try:
+                        cursor.execute(
+                            f"SELECT 1 FROM [{tenant_schema}].[code_entity] WHERE id = %s",
+                            [parent_id],
+                        )
+                        if not cursor.fetchone():
+                            logger.warning(
+                                "Parent entity %s không tồn tại cho %s (%s). Gán parent_id = None để tránh lỗi FK.",
+                                parent_id,
+                                item.name,
+                                item.kind,
+                            )
+                            parent_id = None
+                        else:
+                            persisted_ids.add(parent_id)
+                    except Exception:
+                        parent_id = None
+
                 cursor.execute(
                     insert_sql,
-                    item.id,
-                    item.repository_id,
-                    item.parent_id,
-                    item.kind,
-                    item.name,
-                    item.signature,
-                    item.file_path,
-                    item.commit_hash,
+                    [
+                        item.id,
+                        item.repository_id,
+                        parent_id,
+                        item.kind,
+                        item.name,
+                        item.signature,
+                        item.file_path,
+                        item.commit_hash,
+                    ],
                 )
                 count += 1
             logger.info("Đã lưu %d code_entity vào schema %s", count, tenant_schema)

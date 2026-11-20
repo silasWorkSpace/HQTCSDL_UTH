@@ -10,6 +10,7 @@ import com.livingdocs.integration.repository.IntegrationJdbcRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -26,21 +27,25 @@ public class WebhookProcessingService {
     private final IntegrationJdbcRepository repository;
     private final SourceEventProducer eventProducer;
     private final ObjectMapper objectMapper;
+    private final AnalysisRunService analysisRuns;
 
     public WebhookProcessingService(
             HmacSignatureVerifier signatureVerifier,
             IntegrationJdbcRepository repository,
             SourceEventProducer eventProducer,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AnalysisRunService analysisRuns
     ) {
         this.signatureVerifier = signatureVerifier;
         this.repository = repository;
         this.eventProducer = eventProducer;
         this.objectMapper = objectMapper;
+        this.analysisRuns = analysisRuns;
     }
 
     public record WebhookResult(UUID eventId, boolean isDuplicate, boolean createdByLivingDocs, String message) {}
 
+    @Transactional
     public WebhookResult processWebhook(
             String rawPayload,
             String signatureHeader,
@@ -78,6 +83,10 @@ public class WebhookProcessingService {
             if ("pull_request".equalsIgnoreCase(eventTypeHeader) || root.has("pull_request")) {
                 eventType = "pr";
                 JsonNode prNode = root.path("pull_request");
+                String action = root.path("action").asText("");
+                if (!action.isBlank() && !java.util.Set.of("opened", "synchronize", "reopened", "closed").contains(action)) {
+                    return new WebhookResult(null, false, false, "Pull request action is not part of the LivingDocs source flow.");
+                }
                 githubRef = prNode.path("head").path("ref").asText("refs/pull/head");
                 state = prNode.path("state").asText("open");
                 if (prNode.path("merged").asBoolean(false)) {
@@ -115,7 +124,21 @@ public class WebhookProcessingService {
             log.info("Đã xử lý webhook: eventId={}, isDuplicate={}", ingestResult.eventId(), ingestResult.isDuplicate());
 
             // 6. Nếu là sự kiện mới và KHÔNG phải bot tự sinh, bắn Kafka sang ld.source-events
-            if (!ingestResult.isDuplicate() && !createdByLivingDocs && ingestResult.eventId() != null) {
+            boolean documentationPullRequest = isDocumentationPullRequest(root);
+            if (!ingestResult.isDuplicate() && (!createdByLivingDocs || documentationPullRequest)
+                    && ingestResult.eventId() != null) {
+                String action = root.path("action").asText("");
+                JsonNode pr = root.path("pull_request");
+                String baseSha = pr.path("base").path("sha").asText(root.path("before").asText(null));
+                String headSha = pr.path("head").path("sha").asText(root.path("after").asText(null));
+                UUID analysisRunId = null;
+                boolean sourceChange = !createdByLivingDocs &&
+                        (!"pr".equals(eventType) || java.util.Set.of("opened", "synchronize", "reopened").contains(action));
+                if (sourceChange && headSha != null && !headSha.equals("0".repeat(40))) {
+                    analysisRunId = analysisRuns.startForSourceEvent(repositoryId, ingestResult.eventId(),
+                            correlationId, eventType, githubRef, state, deliveryIdHeader, diffDigest,
+                            false, rawPayload, baseSha, headSha);
+                }
                 SourceEventDto eventDto = new SourceEventDto(
                         ingestResult.eventId(),
                         repositoryId,
@@ -127,7 +150,8 @@ public class WebhookProcessingService {
                         createdByLivingDocs,
                         correlationId,
                         Instant.now(),
-                        rawPayload
+                        rawPayload,
+                        analysisRunId
                 );
                 eventProducer.publishSourceEvent(eventDto);
             }
@@ -152,6 +176,10 @@ public class WebhookProcessingService {
         if (senderLogin.contains("livingdocs") || senderLogin.endsWith("[bot]")) {
             return true;
         }
+        String commitMessage = root.path("head_commit").path("message").asText("");
+        if (commitMessage.startsWith("[LivingDocs] docs: publish ")) {
+            return true;
+        }
         JsonNode prNode = root.path("pull_request");
         if (!prNode.isMissingNode()) {
             String prUser = prNode.path("user").path("login").asText("");
@@ -161,6 +189,11 @@ public class WebhookProcessingService {
             }
         }
         return false;
+    }
+
+    private boolean isDocumentationPullRequest(JsonNode root) {
+        String body = root.path("pull_request").path("body").asText("");
+        return body.contains("LivingDocs-Document-ID:");
     }
 
     private String calculateDigest(String content) {

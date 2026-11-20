@@ -44,7 +44,10 @@ class DriftServiceTest {
         when(repo.findDocument(anyString(), eq(docId))).thenReturn(Optional.of(
                 new WorkflowRepository.DocumentRow(docId, "API Login", "DRAFT", UUID.randomUUID(),
                         devId, null)));
-        when(repo.listDriftAlerts(anyString(), eq(docId))).thenReturn(List.of());
+        when(repo.createDriftAlert(anyString(), any(), any(), anyString(), anyString(), anyString(), anyString()))
+                .thenAnswer(inv -> new WorkflowRepository.DriftAlertInsert(UUID.randomUUID(), true));
+        when(repo.createUpdateSuggestion(anyString(), any(), any(), anyString(), anyString(), any(), anyString()))
+                .thenAnswer(inv -> new WorkflowRepository.SuggestionInsert(suggestionId, true));
     }
 
     @AfterEach
@@ -72,10 +75,11 @@ class DriftServiceTest {
     }
 
     @Test
-    void duplicateAlertIsSkipped() throws Exception {
-        // Alert cùng (source_event, document, type) đã tồn tại → idempotent (FR-DR-13)
-        when(repo.listDriftAlerts(anyString(), eq(docId))).thenReturn(List.of(
-                Map.of("source_event_id", sourceEventId, "drift_type", "Referential")));
+    void duplicateEventDoesNotCreateDuplicateSuggestionOrNotify() throws Exception {
+        when(repo.createDriftAlert(anyString(), any(), any(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new WorkflowRepository.DriftAlertInsert(UUID.randomUUID(), false));
+        when(repo.createUpdateSuggestion(anyString(), any(), any(), anyString(), anyString(), any(), anyString()))
+                .thenReturn(new WorkflowRepository.SuggestionInsert(suggestionId, false));
         String payload = """
                 {"documentId":"%s","sourceEventId":"%s",
                  "findings":[{"driftType":"Referential","severity":"High","evidence":{}}]}
@@ -83,8 +87,7 @@ class DriftServiceTest {
 
         driftService.onDriftFound("acme", MAPPER.readTree(payload));
 
-        verify(repo, never()).createDriftAlert(anyString(), any(), any(), any(), any(), any(),
-                any());
+        verify(repo, never()).supersedeStaleSuggestions(anyString(), any(), any());
     }
 
     @Test

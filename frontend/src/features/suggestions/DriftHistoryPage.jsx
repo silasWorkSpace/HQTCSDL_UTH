@@ -1,129 +1,63 @@
-import { Button, Empty, Result, Select, Skeleton, Space, Table, Tag, Typography } from 'antd'
-import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
-import EvidencePanel from '../../components/EvidencePanel'
-import SeverityBadge from '../../components/SeverityBadge'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { listDriftAlerts, listSuggestions } from '../../services/workflowApi'
+import { normalizeDriftAlert, normalizeSuggestion, uniqueDocuments } from './model'
 import { SEVERITIES } from '../../constants/severity'
-import { formatDateTime, slug } from '../shared/format'
-import { useDriftAlerts, useSuggestions } from './hooks'
-import { filterAlerts, uniqueDocuments } from './model'
 
-/** Lịch sử drift (DR-12): cảnh báo đã xử lý của một tài liệu, lọc theo mức và trạng thái. */
 export default function DriftHistoryPage() {
-  const { t, i18n } = useTranslation()
+  const { id: pathDocumentId } = useParams()
   const [params, setParams] = useSearchParams()
-  const documentId = params.get('documentId')
-  const severity = params.get('severity') ?? undefined
-  const handlingStatus = params.get('handling') ?? undefined
+  const documentId = pathDocumentId || params.get('documentId') || ''
+  const [documents, setDocuments] = useState([])
+  const [alerts, setAlerts] = useState([])
+  const [severity, setSeverity] = useState(params.get('severity') || '')
+  const [handling, setHandling] = useState(params.get('handling') || '')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const documents = useSuggestions(undefined)
-  const alerts = useDriftAlerts(documentId)
+  useEffect(() => {
+    let active = true
+    listSuggestions().then((items) => { if (active) setDocuments(uniqueDocuments((items || []).map(normalizeSuggestion))) })
+      .catch(() => { if (active) setDocuments([]) })
+    return () => { active = false }
+  }, [])
 
-  const documentOptions = useMemo(
-    () => uniqueDocuments(documents.data ?? []).map((d) => ({ value: d.id, label: d.title })),
-    [documents.data],
-  )
-  const handlingOptions = useMemo(
-    () => [...new Set((alerts.data ?? []).map((a) => a.handlingStatus).filter(Boolean))].map((value) => ({ value, label: t(`suggestions.history.handlingStatus.${slug(value)}`, { defaultValue: value }) })),
-    [alerts.data, t],
-  )
-  const rows = useMemo(() => filterAlerts(alerts.data ?? [], { severity, handlingStatus }), [alerts.data, severity, handlingStatus])
+  useEffect(() => {
+    if (!documentId) { setAlerts([]); return undefined }
+    let active = true
+    setLoading(true)
+    setError('')
+    listDriftAlerts(documentId).then((items) => { if (active) setAlerts((items || []).map(normalizeDriftAlert)) })
+      .catch((e) => { if (active) setError(e?.detail || e?.message || 'Không tải được lịch sử drift.') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [documentId])
 
-  const setParam = (key, value) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (value) next.set(key, value)
-      else next.delete(key)
-      return next
-    })
-
-  const columns = [
-    { title: t('suggestions.history.columns.createdAt'), dataIndex: 'createdAt', render: (v) => formatDateTime(v, i18n.language) },
-    {
-      title: t('suggestions.history.columns.driftType'),
-      dataIndex: 'driftType',
-      render: (type) => <Tag>{t(`suggestions.history.types.${slug(type)}`, { defaultValue: type })}</Tag>,
-    },
-    { title: t('suggestions.history.columns.severity'), dataIndex: 'severity', render: (s) => <SeverityBadge severity={s} /> },
-    {
-      title: t('suggestions.history.columns.handling'),
-      dataIndex: 'handlingStatus',
-      render: (s) => <Tag>{t(`suggestions.history.handlingStatus.${slug(s)}`, { defaultValue: s })}</Tag>,
-    },
-    {
-      title: t('suggestions.history.columns.summary'),
-      key: 'summary',
-      render: (_, row) => t('suggestions.history.entities', { count: row.evidence.entities.length }),
-    },
-  ]
-
-  let body
-  if (!documentId) {
-    body = <Empty description={<><strong>{t('suggestions.history.noDocument.title')}</strong><br />{t('suggestions.history.noDocument.description')}</>} />
-  } else if (alerts.isPending) {
-    body = <Skeleton active paragraph={{ rows: 5 }} />
-  } else if (alerts.isError) {
-    body = (
-      <Result
-        status="error"
-        title={t('suggestions.history.error.title')}
-        subTitle={alerts.error?.response?.data?.detail}
-        extra={<Button type="primary" onClick={() => alerts.refetch()}>{t('workflow.retry')}</Button>}
-      />
-    )
-  } else {
-    body = (
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={rows}
-        scroll={{ x: 'max-content' }}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
-        expandable={{ expandedRowRender: (row) => <EvidencePanel evidence={row.evidence} /> }}
-        locale={{ emptyText: <Empty description={<><strong>{t('suggestions.history.empty.title')}</strong><br />{t('suggestions.history.empty.description')}</>} /> }}
-      />
-    )
+  const filtered = useMemo(() => alerts.filter((item) => (!severity || item.severity === severity) && (!handling || item.handlingStatus === handling)), [alerts, severity, handling])
+  const setFilter = (key, value) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value); else next.delete(key)
+    setParams(next)
+    if (key === 'severity') setSeverity(value)
+    if (key === 'handling') setHandling(value)
   }
 
-  return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('suggestions.history.title')}</Typography.Title>
-        <Typography.Text type="secondary">{t('suggestions.history.subtitle')}</Typography.Text>
-      </div>
-      <Space wrap>
-        <Select
-          showSearch
-          optionFilterProp="label"
-          style={{ minWidth: 260 }}
-          placeholder={t('suggestions.history.selectDocument')}
-          aria-label={t('suggestions.history.document')}
-          options={documentOptions}
-          loading={documents.isPending}
-          value={documentId ?? undefined}
-          onChange={(value) => setParam('documentId', value)}
-        />
-        <Select
-          allowClear
-          style={{ minWidth: 160 }}
-          placeholder={t('suggestions.history.allSeverities')}
-          aria-label={t('suggestions.history.severity')}
-          options={SEVERITIES.map((value) => ({ value, label: t(`severity.${value.toLowerCase()}`) }))}
-          value={severity}
-          onChange={(value) => setParam('severity', value)}
-        />
-        <Select
-          allowClear
-          style={{ minWidth: 180 }}
-          placeholder={t('suggestions.history.allHandling')}
-          aria-label={t('suggestions.history.handling')}
-          options={handlingOptions}
-          value={handlingStatus}
-          onChange={(value) => setParam('handling', value)}
-        />
-      </Space>
-      {body}
-    </Space>
-  )
+  return <main style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+    <h1>Lịch sử drift</h1>
+    <p>Các lần thay đổi code ảnh hưởng đến entity được liên kết với tài liệu.</p>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, margin: '18px 0' }}>
+      {!pathDocumentId && <label>Tài liệu<select className="ld-select" value={documentId} onChange={(e) => setFilter('documentId', e.target.value)}><option value="">Chọn tài liệu</option>{documents.map((doc) => <option key={doc.id} value={doc.id}>{doc.title}</option>)}</select></label>}
+      <label>Mức độ<select className="ld-select" value={severity} onChange={(e) => setFilter('severity', e.target.value)}><option value="">Tất cả mức</option>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}</select></label>
+      <label>Trạng thái<select className="ld-select" value={handling} onChange={(e) => setFilter('handling', e.target.value)}><option value="">Tất cả trạng thái</option>{[...new Set(alerts.map((item) => item.handlingStatus).filter(Boolean))].map((s) => <option key={s}>{s}</option>)}</select></label>
+    </div>
+    {!documentId && <p>Chọn tài liệu để xem drift alert.</p>}
+    {loading && <p role="status">Đang tải…</p>}
+    {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+    {!loading && documentId && !error && !filtered.length && <p>Không có drift alert phù hợp.</p>}
+    {filtered.map((alert) => <details key={alert.id} className="ld-card" style={{ padding: 16, margin: '10px 0' }}>
+      <summary style={{ cursor: 'pointer' }}><strong>{alert.driftType}</strong> · {alert.severity} · {alert.handlingStatus} · {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : ''}</summary>
+      <p>Commit: {alert.evidence.commit || '—'} · File: {alert.evidence.file || '—'}</p>
+      <pre style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: 12, overflowX: 'auto' }}>{JSON.stringify(alert.evidence, null, 2)}</pre>
+    </details>)}
+  </main>
 }

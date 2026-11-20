@@ -8,7 +8,7 @@ public record TokenResponse(
         String refreshToken,
         String tokenType,
         long expiresIn,
-        String githubAccessToken
+        String githubConnectionId
 ) {
     public TokenResponse(String accessToken, String refreshToken, String tokenType, long expiresIn) {
         this(accessToken, refreshToken, tokenType, expiresIn, null);

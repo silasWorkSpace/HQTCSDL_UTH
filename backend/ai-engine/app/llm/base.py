@@ -2,6 +2,16 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from app.llm.schemas import DocDraft
 
+class LlmProviderError(RuntimeError):
+    """Safe provider failure that can be persisted and returned without secrets."""
+
+    def __init__(self, message: str, *, upstream_status: int | None = None,
+                 provider_code: str | None = None, retryable: bool = True):
+        super().__init__(message)
+        self.upstream_status = upstream_status
+        self.provider_code = provider_code
+        self.retryable = retryable
+
 class LlmProvider(ABC):
     """
     Unified abstract interface for LLM providers.

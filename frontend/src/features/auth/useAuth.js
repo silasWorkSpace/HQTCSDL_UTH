@@ -1,37 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import apiClient from '../../services/api/apiClient';
 
-/**
- * Hook quản lý thông tin phiên làm việc và vai trò hiện tại.
- * Đồng bộ với localStorage ('ld_role') và tương thích hoàn toàn với hệ thống quyền của LivingDocs.
- */
 export function useAuth() {
-  const [role, setRole] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ld_role') || 'Administrator';
-    }
-    return 'Administrator';
-  });
-
+  const [session, setSession] = useState({ user: null, roles: [], loading: true });
   useEffect(() => {
-    const handleStorage = () => {
-      const stored = localStorage.getItem('ld_role');
-      if (stored && stored !== role) {
-        setRole(stored);
+    let active = true;
+    let generation = 0;
+    const refresh = async () => {
+      const requestGeneration = ++generation;
+      try {
+        const { data } = await apiClient.get('/api/v1/users/me');
+        if (!data || typeof data !== 'object' || !Array.isArray(data.roles) || !data.id) {
+          throw new Error('Invalid current-user response');
+        }
+        if (active && requestGeneration === generation) {
+          setSession({ user: data, roles: data.roles, loading: false });
+        }
+      } catch {
+        if (active && requestGeneration === generation) setSession({ user: null, roles: [], loading: false });
       }
     };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [role]);
-
-  return {
-    user: {
-      id: 'u-admin-01',
-      name: 'System Admin',
-      roles: [role, 'Administrator'],
-    },
-    role,
-    roles: [role, 'Administrator'],
-  };
+    refresh();
+    window.addEventListener('livingdocs:session-changed', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('livingdocs:session-changed', refresh);
+    };
+  }, []);
+  return { ...session, role: session.roles[0] || null };
 }
 
 export default useAuth;

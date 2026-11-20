@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   History,
   Lock,
+  Eye,
+  RotateCcw,
 } from 'lucide-react';
 import { useI18n } from '../../../i18n/I18nContext';
 import { templatesApi } from '../api';
@@ -35,6 +37,44 @@ export default function TemplateEditorPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+
+  const handlePreview = async () => {
+    try {
+      setPreviewLoading(true);
+      let parsedRules = null;
+      if (formatRulesJson.trim()) {
+        try { parsedRules = JSON.parse(formatRulesJson); } catch { /* ignore */ }
+      }
+      const res = await templatesApi.previewTemplate(templateId, {
+        sections: { sections },
+        formatRules: parsedRules,
+      });
+      setPreviewData(res);
+      setPreviewModalOpen(true);
+    } catch (err) {
+      alert('Lỗi xem trước mẫu: ' + (err?.message || 'Thử lại sau'));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleRollback = async (verNo) => {
+    if (!window.confirm(`Bạn có chắc muốn rollback template về phiên bản #${verNo}?`)) return;
+    try {
+      setRollingBack(true);
+      await templatesApi.rollbackTemplate(templateId, verNo, `Rollback về v${verNo}`);
+      alert(`Đã rollback thành công về phiên bản #${verNo}`);
+      window.location.reload();
+    } catch (err) {
+      alert('Không thể rollback template: ' + (err?.message || 'Thử lại sau'));
+    } finally {
+      setRollingBack(false);
+    }
+  };
 
   const isTechLead = userRole === 'Technical Lead' || userRole === 'TechLead' || userRole === 'Administrator';
   const isFormDisabled = readOnly || !isTechLead;
@@ -183,18 +223,31 @@ export default function TemplateEditorPage({
           {isCreate ? t('templates.createTitle') : `${t('templates.editTitle')}: ${name}`}
         </h2>
 
-        {!isFormDisabled && (
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
             type="button"
-            onClick={handleSubmit}
-            disabled={saving}
-            className="ld-btn ld-btn-primary"
-            style={{ padding: '8px 18px' }}
+            onClick={handlePreview}
+            disabled={previewLoading}
+            className="ld-btn ld-btn-ghost"
+            style={{ padding: '8px 14px', border: '1px solid #cbd5e1' }}
           >
-            <Save size={14} />
-            {saving ? t('common.saving') : t('common.save')}
+            <Eye size={14} />
+            {previewLoading ? 'Đang dựng...' : 'Xem trước'}
           </button>
-        )}
+
+          {!isFormDisabled && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className="ld-btn ld-btn-primary"
+              style={{ padding: '8px 18px' }}
+            >
+              <Save size={14} />
+              {saving ? t('common.saving') : t('common.save')}
+            </button>
+          )}
+        </div>
       </div>
 
       {isFormDisabled && (
@@ -398,11 +451,115 @@ export default function TemplateEditorPage({
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                  {formatDateTime(v.createdAt)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                    {formatDateTime(v.createdAt)}
+                  </span>
+                  {!isFormDisabled && (
+                    <button
+                      type="button"
+                      disabled={rollingBack}
+                      onClick={() => handleRollback(v.versionNo)}
+                      className="ld-btn ld-btn-ghost ld-btn-sm"
+                      style={{ color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title={`Rollback về phiên bản #${v.versionNo}`}
+                    >
+                      <RotateCcw size={12} />
+                      Rollback
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: '8px',
+              maxWidth: '750px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                Xem trước cấu trúc Template ({previewData?.totalSections || 0} mục)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPreviewModalOpen(false)}
+                className="ld-btn ld-btn-ghost ld-btn-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: '#64748b' }}>
+                Mẫu markdown kết xuất sơ bộ dựa trên các section và format rules hiện tại:
+              </div>
+              <pre
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#f8fafc',
+                  padding: '16px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  lineHeight: '1.5',
+                  overflowX: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                }}
+              >
+                {previewData?.previewMarkdown || '(Chưa có nội dung markdown)'}
+              </pre>
+            </div>
+            <div
+              style={{
+                padding: '12px 20px',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewModalOpen(false)}
+                className="ld-btn ld-btn-secondary"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

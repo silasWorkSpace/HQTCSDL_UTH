@@ -1,6 +1,7 @@
 target/
 .env
 .venv/
+.local-run/
 __pycache__/
 *.pyc
 .idea/

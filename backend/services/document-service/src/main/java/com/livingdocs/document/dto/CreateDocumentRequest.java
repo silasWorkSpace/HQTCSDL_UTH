@@ -1,10 +1,11 @@
 package com.livingdocs.document.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
 public record CreateDocumentRequest(
-        UUID repositoryId,
+        @NotNull UUID repositoryId,
         @NotBlank String docType,
         @NotBlank String title,
         String pathInRepo,

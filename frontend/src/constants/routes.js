@@ -15,4 +15,6 @@ export const ROUTES = {
   REVIEW_DETAIL: (id = ':id') => `/reviews/${id}`,
   SUGGESTIONS: '/suggestions',
   DRIFT_HISTORY: '/drift-history',
+  GOVERNANCE_DASHBOARD: '/governance/dashboard',
+  GOVERNANCE_POLICIES: '/governance/policies',
 };

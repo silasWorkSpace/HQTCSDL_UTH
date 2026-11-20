@@ -68,30 +68,22 @@ Thay vì phải mở hàng loạt terminal thủ công để cấu hình và b�
 
 ### 5.1. Khởi động hệ thống (`start-all.ps1`)
 
+Trước lần chạy đầu tiên, tạo `backend/infra/docker/.env` từ `.env.example`, đặt mật khẩu SQL Server và JWT secret riêng, rồi cấu hình GitHub OAuth App với callback `http://localhost:5173/auth/callback`. Không dùng placeholder hay mật khẩu mẫu. Docker Desktop, JDK 21, Node.js/npm và kết nối mạng để tải dependencies cần sẵn sàng.
+
 ```powershell
-# Chế độ 1: Full Docker Container (Khuyến nghị cho kiểm thử đóng gói & Demo hoàn chỉnh)
+# SQL Server/Redis/Kafka trong Docker; backend chạy bằng Maven, frontend bằng Vite
+.\start-all.ps1
+
+# Tương tự, nhưng backend cũng chạy bằng Docker Compose
 .\start-all.ps1 -Docker
 
-# Chế độ 2: Local Dev (Khuyến nghị cho lập trình & Debug log trực tiếp từng service)
-.\start-all.ps1
+# Mở đăng ký GitHub cho riêng workspace demo trong database local
+.\start-all.ps1 -OpenDemoSignup
 ```
 
-* **Chế độ Full Docker (`-Docker`)**:
-  1. Tự động kiểm tra Docker Desktop đã bật hay chưa.
-  2. Tự động biên dịch nhanh các file JAR trên máy host (tận dụng cache `.m2` có sẵn, không lỗi SSL mạng).
-  3. Bật hạ tầng SQL Server, Redis, Kafka; chờ SQL Server sẵn sàng và tự động chạy `db.ps1 init` + `tenant demo` + `seed demo` nếu database chưa tồn tại.
-  4. Đóng gói và khởi chạy **10 containers** Docker (`mssql`, `redis`, `kafka`, 6 Spring Boot Services, FastAPI AI Engine) trong trạng thái Healthy.
-  5. Tự động khởi chạy Frontend Vite và mở trình duyệt web tại `http://localhost:5173`.
+Mặc định script kiểm tra cổng và từ chối chạy nếu có ứng dụng khác đang dùng cổng cần thiết, chờ hạ tầng khỏe, khởi tạo database/workspace demo nếu thiếu, build backend, mở sáu backend service và frontend. AI/RAG không chạy trong luồng MVP này. `-Docker` chỉ chuyển backend sang Compose; SQL Server, Redis và Kafka vẫn chạy trong Docker ở cả hai chế độ. `-NoFrontend`, `-NoBrowser` và `-SkipDatabaseInit` lần lượt bỏ frontend, không mở trình duyệt, hoặc bỏ bước khởi tạo database.
 
-* **Chế độ Local Dev (Mặc định)**:
-  1. Tự động giải phóng các port nếu đang bị tiến trình cũ chiếm dụng (8081–8086, 8090, 5173).
-  2. Tự động bật cụm hạ tầng Docker (SQL Server, Redis, Kafka).
-  3. Mở đồng thời toàn bộ microservices backend, AI engine và frontend trong các Tab của Windows Terminal (hoặc các cửa sổ console có gắn nhãn tên và icon màu) để tiện theo dõi log thời gian thực.
-  4. Tự động mở trình duyệt web tại `http://localhost:5173`.
-
-* **Tùy chọn bổ sung:**
-  * Chỉ chạy Backend & AI Engine (không mở Frontend): `.\start-all.ps1 -NoFrontend`
-  * Mở cửa sổ Console riêng biệt thay vì gom Tab: `.\start-all.ps1 -WindowMode windows`
+Các cửa sổ log do script mở được ghi nhận trong `backend/.local-run/start-all.json`. Script không tự dừng process lạ theo cổng. Nếu chưa cấu hình OAuth thật, ứng dụng không thể hoàn tất đăng nhập GitHub; `-OpenDemoSignup` chỉ mở đăng ký cho database demo local, không thay thế OAuth credentials.
 
 ---
 
@@ -103,7 +95,7 @@ Khi kết thúc phiên làm việc hoặc kiểm thử, bạn có thể dọn d�
 # Dừng toàn bộ các ứng dụng cục bộ (giữ lại container hạ tầng SQL Server, Redis, Kafka)
 .\stop-all.ps1
 
-# Dừng SẠCH SẼ toàn bộ (tắt cả ứng dụng lẫn toàn bộ container Docker)
+# Dừng ứng dụng local và toàn bộ Docker containers (volume dữ liệu vẫn được giữ)
 .\stop-all.ps1 -Docker
 ```
 

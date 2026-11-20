@@ -8,6 +8,33 @@ from typing import Literal, Optional
 
 EntityKind = Literal["class", "method", "endpoint", "parameter"]
 
+UUID_NAMESPACE_CODE_ENTITY = uuid.UUID("a3b8c2d1-4e5f-6a7b-8c9d-0e1f2a3b4c5d")
+
+
+def generate_entity_id(
+    repository_id: Optional[str],
+    commit_hash: str,
+    file_path: str,
+    kind: str,
+    name: str,
+    signature: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    index: Optional[int] = None,
+) -> str:
+    """Sinh UUIDv5 xác định (deterministic) từ thuộc tính đặc trưng của thực thể mã nguồn."""
+    parts = [
+        str(repository_id or ""),
+        str(commit_hash or ""),
+        str(file_path or ""),
+        str(parent_id or ""),
+        str(kind or ""),
+        str(name or ""),
+        str(signature or ""),
+    ]
+    if index is not None:
+        parts.append(str(index))
+    return str(uuid.uuid5(UUID_NAMESPACE_CODE_ENTITY, ":".join(parts)))
+
 
 @dataclass
 class CodeEntity:

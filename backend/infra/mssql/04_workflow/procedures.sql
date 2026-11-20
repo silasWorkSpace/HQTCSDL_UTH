@@ -45,14 +45,27 @@ CREATE OR ALTER PROCEDURE [$(SchemaName)].sp_create_drift_alert
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    INSERT INTO [$(SchemaName)].drift_alert (
-        source_event_id, document_id, drift_type, severity, evidence, handling_status
-    )
-    OUTPUT INSERTED.id
-    VALUES (
-        @source_event_id, @document_id, @drift_type, @severity, @evidence, @handling_status
-    );
+    SET XACT_ABORT ON;
+    BEGIN TRANSACTION;
+    DECLARE @alert_id UNIQUEIDENTIFIER;
+    DECLARE @created BIT = 0;
+    DECLARE @inserted_alert TABLE (id UNIQUEIDENTIFIER);
+    SELECT @alert_id = id FROM [$(SchemaName)].drift_alert WITH (UPDLOCK, HOLDLOCK)
+     WHERE source_event_id=@source_event_id AND document_id=@document_id AND drift_type=@drift_type;
+    IF @alert_id IS NULL
+    BEGIN
+        INSERT INTO [$(SchemaName)].drift_alert (
+            source_event_id, document_id, drift_type, severity, evidence, handling_status
+        ) OUTPUT INSERTED.id INTO @inserted_alert
+          VALUES (@source_event_id, @document_id, @drift_type, @severity, @evidence, @handling_status);
+        SELECT @alert_id=id FROM @inserted_alert;
+        SET @created = 1;
+    END
+    ELSE
+        UPDATE [$(SchemaName)].drift_alert SET severity=@severity, evidence=@evidence,
+            updated_at=SYSUTCDATETIME() WHERE id=@alert_id;
+    COMMIT TRANSACTION;
+    SELECT @alert_id AS id, @created AS created;
 END;
 GO
 /* ---------- seed document_status_transition ----------
@@ -170,14 +183,27 @@ CREATE OR ALTER PROCEDURE [$(SchemaName)].[sp_create_update_suggestion]
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    INSERT INTO [$(SchemaName)].[update_suggestion]
-        (document_id, drift_alert_id, origin, content, confidence_score,
-         evidence, status, auto_apply_eligible)
-    OUTPUT INSERTED.id
-    VALUES
-        (@document_id, @drift_alert_id, @origin, @content, @confidence_score,
-         @evidence, N'Pending Developer Action', @auto_apply_eligible);
+    SET XACT_ABORT ON;
+    BEGIN TRANSACTION;
+    DECLARE @suggestion_id UNIQUEIDENTIFIER;
+    DECLARE @created BIT = 0;
+    DECLARE @inserted_suggestion TABLE (id UNIQUEIDENTIFIER);
+    IF @drift_alert_id IS NOT NULL
+        SELECT @suggestion_id=id FROM [$(SchemaName)].update_suggestion WITH (UPDLOCK, HOLDLOCK)
+         WHERE drift_alert_id=@drift_alert_id;
+    IF @suggestion_id IS NULL
+    BEGIN
+        INSERT INTO [$(SchemaName)].[update_suggestion]
+            (document_id, drift_alert_id, origin, content, confidence_score,
+             evidence, status, auto_apply_eligible)
+        OUTPUT INSERTED.id INTO @inserted_suggestion
+        VALUES (@document_id, @drift_alert_id, @origin, @content, @confidence_score,
+                @evidence, N'Pending Developer Action', @auto_apply_eligible);
+        SELECT @suggestion_id=id FROM @inserted_suggestion;
+        SET @created = 1;
+    END;
+    COMMIT TRANSACTION;
+    SELECT @suggestion_id AS id, @created AS created;
 END
 GO
 

@@ -4,6 +4,7 @@ import com.livingdocs.integration.config.TenantContext;
 import com.livingdocs.integration.dto.ConnectionResponse;
 import com.livingdocs.integration.dto.RepositoryDto;
 import com.livingdocs.integration.dto.SourceEventDto;
+import com.livingdocs.integration.dto.CodeEntityDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -120,6 +121,26 @@ public class IntegrationJdbcRepository {
         return list.stream().findFirst();
     }
 
+    public Optional<ConnectionResponse> findConnectionByInstallationId(String installationId) {
+        String schema = TenantContext.getSchemaName();
+        String sql = String.format("SELECT id, installation_id, account_login, status, connected_by, created_at FROM [%s].github_connection WHERE installation_id = ?", schema);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> new ConnectionResponse(
+                UUID.fromString(rs.getString("id")), rs.getString("installation_id"), rs.getString("account_login"),
+                rs.getString("status"), UUID.fromString(rs.getString("connected_by")), rs.getTimestamp("created_at").toInstant()
+        ), installationId).stream().findFirst();
+    }
+
+    public byte[] findEncryptedToken(UUID connectionId) {
+        String schema = TenantContext.getSchemaName();
+        return jdbcTemplate.queryForObject(String.format("SELECT access_token_enc FROM [%s].github_connection WHERE id = ?", schema),
+                (rs, rowNum) -> rs.getBytes(1), connectionId);
+    }
+
+    public void updateConnectionToken(UUID connectionId, byte[] encryptedToken) {
+        String schema = TenantContext.getSchemaName();
+        jdbcTemplate.update(String.format("UPDATE [%s].github_connection SET access_token_enc = ?, updated_at = SYSUTCDATETIME() WHERE id = ?", schema), encryptedToken, connectionId);
+    }
+
     public UUID saveRepository(UUID connectionId, Long githubRepoId, String fullName, String defaultBranch) {
         String schema = TenantContext.getSchemaName();
         UUID id = UUID.randomUUID();
@@ -184,8 +205,40 @@ public class IntegrationJdbcRepository {
                 rs.getBoolean("created_by_livingdocs"),
                 rs.getObject("correlation_id") != null ? UUID.fromString(rs.getString("correlation_id")) : null,
                 rs.getTimestamp("received_at") != null ? rs.getTimestamp("received_at").toInstant() : Instant.now(),
-                rs.getString("payload")
+                rs.getString("payload"),
+                null
         ), repositoryId);
+    }
+
+    public List<CodeEntityDto> findCodeEntities(UUID repositoryId, String commitSha,
+            String pathPrefix, String kind, String query) {
+        if (commitSha == null || !commitSha.matches("[0-9a-fA-F]{40}")) {
+            throw new IllegalArgumentException("A full commit SHA is required");
+        }
+        String schema = TenantContext.getSchemaName();
+        StringBuilder sql = new StringBuilder("SELECT TOP (1000) id, repository_id, parent_id, kind, name, signature, file_path, commit_hash FROM [")
+                .append(schema).append("].code_entity WHERE repository_id=? AND commit_hash=? AND removed_at IS NULL");
+        List<Object> args = new java.util.ArrayList<>(List.of(repositoryId, commitSha));
+        if (pathPrefix != null && !pathPrefix.isBlank()) {
+            sql.append(" AND file_path LIKE ?");
+            args.add(pathPrefix.replace("%", "[%]").replace("_", "[_]") + "%");
+        }
+        if (kind != null && !kind.isBlank()) {
+            sql.append(" AND kind=?");
+            args.add(kind);
+        }
+        if (query != null && !query.isBlank()) {
+            sql.append(" AND (name LIKE ? OR file_path LIKE ?)");
+            String pattern = "%" + query.replace("%", "[%]").replace("_", "[_]") + "%";
+            args.add(pattern);
+            args.add(pattern);
+        }
+        sql.append(" ORDER BY file_path, kind, name");
+        return jdbcTemplate.query(sql.toString(), (rs, row) -> new CodeEntityDto(
+                rs.getObject("id", UUID.class), rs.getObject("repository_id", UUID.class),
+                rs.getObject("parent_id", UUID.class), rs.getString("kind"), rs.getString("name"),
+                rs.getString("signature"), rs.getString("file_path"), rs.getString("commit_hash")),
+                args.toArray());
     }
 
     private RepositoryDto mapRepositoryDto(ResultSet rs, int rowNum) throws java.sql.SQLException {

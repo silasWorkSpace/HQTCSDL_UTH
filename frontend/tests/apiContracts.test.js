@@ -1,104 +1,91 @@
 import test from 'node:test';
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
+import apiClient from '../src/services/api/apiClient.js';
 import { documentsApi } from '../src/features/documents/api.js';
-import { templatesApi } from '../src/features/templates/api.js';
+import viteConfig from '../vite.config.js';
 
-test('documentsApi.getDocuments returns normalized pagination wrapper', async () => {
-  const result = await documentsApi.getDocuments({ page: 0, size: 10 });
-  assert.ok(Array.isArray(result.items));
-  assert.ok(typeof result.total === 'number');
-  assert.strictEqual(result.page, 0);
-  assert.strictEqual(result.size, 10);
+const originalGet = apiClient.get;
+const originalPut = apiClient.put;
+const originalPost = apiClient.post;
+
+test.afterEach(() => {
+  apiClient.get = originalGet;
+  apiClient.put = originalPut;
+  apiClient.post = originalPost;
 });
 
-test('documentsApi.updateDraft detects 409 conflict when baseVersionNo differs', async () => {
-  const docs = await documentsApi.getDocuments();
-  const targetDoc = docs.items[0];
+test('documentsApi.getDocuments normalizes the real API list response', async () => {
+  const documents = [{ id: 'doc-1' }, { id: 'doc-2' }];
+  apiClient.get = async (url, config) => {
+    assert.equal(url, '/api/v1/documents');
+    assert.deepEqual(config.params, { page: 2, size: 5 });
+    return { data: documents };
+  };
 
-  // Pass an obsolete baseVersionNo (e.g. 999)
+  assert.deepEqual(await documentsApi.getDocuments({ page: 2, size: 5 }), {
+    items: documents,
+    total: 2,
+    page: 2,
+    size: 5,
+  });
+});
+
+test('documentsApi.updateDraft sends optimistic concurrency version to the backend', async () => {
+  const conflict = Object.assign(new Error('version conflict'), { response: { status: 409 } });
+  apiClient.put = async (url, body) => {
+    assert.equal(url, '/api/v1/documents/doc-1/draft');
+    assert.deepEqual(body, { content: '# updated', baseVersionNo: 7 });
+    throw conflict;
+  };
+
   await assert.rejects(
-    async () => {
-      await documentsApi.updateDraft(targetDoc.id, {
-        content: 'New draft edits',
-        baseVersionNo: 999,
-      });
-    },
-    (err) => {
-      assert.strictEqual(err.response?.status, 409);
-      return true;
-    }
+    documentsApi.updateDraft('doc-1', { content: '# updated', baseVersionNo: 7 }),
+    (error) => error === conflict && error.response.status === 409,
   );
 });
 
-test('documentsApi.rollbackDocument creates new version and checks redacted', async () => {
-  // Test rollback on valid doc
-  const docs = await documentsApi.getDocuments();
-  const validDoc = docs.items[0];
+test('documentsApi.rollbackDocument creates the requested rollback through the backend', async () => {
+  const rollback = { versionNo: 8, changeSource: 'ROLLBACK' };
+  apiClient.post = async (url, body) => {
+    assert.equal(url, '/api/v1/documents/doc-1/rollback');
+    assert.deepEqual(body, { targetVersionNo: 3, reason: 'Restore approved content' });
+    return { data: rollback };
+  };
 
-  const rollbackRes = await documentsApi.rollbackDocument(validDoc.id, {
-    targetVersionNo: 1,
-    reason: 'Phục hồi về phiên bản ban đầu',
-  });
-
-  assert.ok(rollbackRes.versionNo > 1);
-  assert.strictEqual(rollbackRes.changeSource, 'ROLLBACK');
-
-  // Test rollback on redacted doc (should throw 409)
-  const redactedDoc = docs.items.find((d) => d.id === 'd1000000-0000-0000-0000-000000000006');
-  if (redactedDoc) {
-    await assert.rejects(
-      async () => {
-        await documentsApi.rollbackDocument(redactedDoc.id, {
-          targetVersionNo: 1,
-          reason: 'Test redacted rollback',
-        });
-      },
-      (err) => {
-        assert.strictEqual(err.response?.status, 409);
-        return true;
-      }
-    );
-  }
+  assert.equal(await documentsApi.rollbackDocument('doc-1', {
+    targetVersionNo: 3,
+    reason: 'Restore approved content',
+  }), rollback);
 });
 
-test('documentsApi.generateDocument enqueues AI job and returns 202', async () => {
-  const res = await documentsApi.generateDocument({
-    scopeType: 'FILE',
-    scopeReference: 'src/core/auth.js',
-    repositoryId: '11111111-1111-1111-1111-111111111111',
-    templateId: 't1000000-0000-0000-0000-000000000001',
-    title: 'Auth Spec',
-    targetPath: 'docs/auth.md',
-  });
+test('documentsApi starts and polls a repository analysis run through the backend', async () => {
+  const queued = { runId: 'run-1', status: 'queued' };
+  const completed = { id: 'run-1', status: 'completed', filesIndexed: 4, entitiesIndexed: 12 };
+  apiClient.post = async (url, body) => {
+    assert.equal(url, '/api/v1/repositories/repo-1/analysis-runs');
+    assert.equal(body, undefined);
+    return { data: queued };
+  };
+  apiClient.get = async (url) => {
+    assert.equal(url, '/api/v1/analysis-runs/run-1');
+    return { data: completed };
+  };
 
-  assert.ok(res.jobId);
-  assert.strictEqual(res.status, 'QUEUED');
+  assert.equal(await documentsApi.startAnalysisRun('repo-1'), queued);
+  assert.equal(await documentsApi.getAnalysisRun(queued.runId), completed);
 });
 
-test('templatesApi.getTemplates contains standard seed templates', async () => {
-  const tpls = await templatesApi.getTemplates();
-  assert.ok(tpls.length >= 5);
+test('documentsApi lists analysis runs filtered by repository', async () => {
+  const runs = [{ id: 'run-1', status: 'completed' }];
+  apiClient.get = async (url, config) => {
+    assert.equal(url, '/api/v1/analysis-runs');
+    assert.deepEqual(config.params, { repositoryId: 'repo-1' });
+    return { data: runs };
+  };
 
-  const names = tpls.map((t) => t.name);
-  assert.ok(names.includes('API Reference'));
-  assert.ok(names.includes('README'));
-  assert.ok(names.includes('Module Guide'));
-  assert.ok(names.includes('Onboarding Guide'));
-  assert.ok(names.includes('ADR'));
+  assert.deepEqual(await documentsApi.getAnalysisRuns('repo-1'), runs);
 });
 
-test('templatesApi.createTemplate rejects duplicate names with 409', async () => {
-  await assert.rejects(
-    async () => {
-      await templatesApi.createTemplate({
-        name: 'README', // already exists
-        docType: 'README',
-        sections: { sections: [{ key: 'intro', title: 'Intro' }] },
-      });
-    },
-    (err) => {
-      assert.strictEqual(err.response?.status, 409);
-      return true;
-    }
-  );
+test('Vite proxies analysis run polling to Integration Service', () => {
+  assert.equal(viteConfig.server.proxy['/api/v1/analysis-runs'].target, 'http://localhost:8082');
 });

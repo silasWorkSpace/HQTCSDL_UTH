@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENV LLM_PROVIDER=mock
+ENV LLM_PROVIDER=gemini
 ENV LLM_MODEL=mock-model-v1
 ENV PORT=8090
 

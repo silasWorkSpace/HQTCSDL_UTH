@@ -16,8 +16,19 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${app.jwt.secret:${livingdocs.security.jwt-secret:${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}}}")
+    @Value("${JWT_SECRET}")
     private String jwtSecret;
+    @Value("${COOKIE_SECURE:true}")
+    private boolean secureCookies;
+
+    @Bean
+    public org.springframework.beans.factory.InitializingBean validateJwtSecret() {
+        return () -> {
+            if (jwtSecret == null || jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
+                throw new IllegalStateException("JWT_SECRET phải có ít nhất 32 byte");
+            }
+        };
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -28,7 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/error", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(new JwtAuthenticationFilter(jwtSecret), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(new JwtAuthenticationFilter(jwtSecret, secureCookies), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

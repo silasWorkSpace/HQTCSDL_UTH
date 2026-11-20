@@ -1,21 +1,17 @@
 package com.livingdocs.governance.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.livingdocs.common.security.SecurityUtils;
 import com.livingdocs.common.security.TenantContext;
-import com.livingdocs.governance.dto.CollectionResponse;
-import com.livingdocs.governance.dto.CreateTemplateRequest;
-import com.livingdocs.governance.dto.TemplateResponse;
+import com.livingdocs.governance.dto.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.PreparedStatement;
-import java.sql.Statement;
-import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -40,9 +36,32 @@ public class TemplateService {
         }
     }
 
+    public void validateSections(String sectionsJson) {
+        validateJson(sectionsJson);
+        try {
+            JsonNode root = objectMapper.readTree(sectionsJson);
+            JsonNode sectionsNode = root.has("sections") ? root.get("sections") : root;
+            if (!sectionsNode.isArray()) {
+                throw new IllegalArgumentException("Sections schema must contain a JSON array of sections.");
+            }
+            for (JsonNode sec : sectionsNode) {
+                if (!sec.has("key") || sec.get("key").asText().isBlank()) {
+                    throw new IllegalArgumentException("Each section must have a non-empty 'key'.");
+                }
+                if (!sec.has("title") || sec.get("title").asText().isBlank()) {
+                    throw new IllegalArgumentException("Each section must have a non-empty 'title'.");
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid sections schema: " + e.getMessage(), e);
+        }
+    }
+
     @Transactional
     public TemplateResponse createTemplate(CreateTemplateRequest req) {
-        validateJson(req.getSections());
+        validateSections(req.getSections());
         if (req.getFormatRules() != null && !req.getFormatRules().isBlank()) {
             validateJson(req.getFormatRules());
         }
@@ -135,14 +154,37 @@ public class TemplateService {
         }, id);
 
         if (results.isEmpty()) {
-            throw new RuntimeException("Template not found: " + id);
+            throw new IllegalArgumentException("Template not found: " + id);
         }
         return results.get(0);
     }
 
+    public List<TemplateVersionResponse> getTemplateVersions(UUID id) {
+        String schema = TenantContext.getSchema();
+        String sql = String.format(
+            "SELECT id, template_id, version_no, sections, format_rules, change_note, created_by, created_at " +
+            "FROM [%s].[template_version] WHERE template_id = ? ORDER BY version_no DESC",
+            schema
+        );
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            String createdByStr = rs.getString("created_by");
+            UUID createdBy = createdByStr != null ? UUID.fromString(createdByStr) : null;
+            return new TemplateVersionResponse(
+                UUID.fromString(rs.getString("id")),
+                UUID.fromString(rs.getString("template_id")),
+                rs.getInt("version_no"),
+                rs.getString("sections"),
+                rs.getString("format_rules"),
+                rs.getString("change_note"),
+                createdBy,
+                rs.getTimestamp("created_at").toInstant()
+            );
+        }, id);
+    }
+
     @Transactional
     public TemplateResponse updateTemplate(UUID id, CreateTemplateRequest req) {
-        validateJson(req.getSections());
+        validateSections(req.getSections());
         if (req.getFormatRules() != null && !req.getFormatRules().isBlank()) {
             validateJson(req.getFormatRules());
         }
@@ -176,6 +218,143 @@ public class TemplateService {
     }
 
     @Transactional
+    public TemplateResponse rollbackTemplate(UUID id, RollbackTemplateRequest req) {
+        String schema = TenantContext.getSchema();
+        UUID userId = SecurityUtils.getCurrentUserId();
+
+        // 1. Fetch target version
+        String targetSql = String.format(
+            "SELECT id, version_no, sections, format_rules FROM [%s].[template_version] " +
+            "WHERE template_id = ? AND version_no = ?",
+            schema
+        );
+        List<TemplateVersionResponse> versions = jdbcTemplate.query(targetSql, (rs, rn) -> {
+            TemplateVersionResponse v = new TemplateVersionResponse();
+            v.setId(UUID.fromString(rs.getString("id")));
+            v.setVersionNo(rs.getInt("version_no"));
+            v.setSections(rs.getString("sections"));
+            v.setFormatRules(rs.getString("format_rules"));
+            return v;
+        }, id, req.getTargetVersionNo());
+
+        if (versions.isEmpty()) {
+            throw new IllegalArgumentException(String.format("Template version %d not found for template %s", req.getTargetVersionNo(), id));
+        }
+
+        TemplateVersionResponse target = versions.get(0);
+
+        // 2. Determine next version number
+        String verSql = String.format(
+            "SELECT ISNULL(MAX(version_no), 0) FROM [%s].[template_version] WHERE template_id = ?",
+            schema
+        );
+        Integer maxVer = jdbcTemplate.queryForObject(verSql, Integer.class, id);
+        int nextVer = (maxVer != null ? maxVer : 0) + 1;
+
+        // 3. Create new template_version
+        UUID newVersionId = UUID.randomUUID();
+        String note = (req.getChangeNote() != null && !req.getChangeNote().isBlank())
+            ? req.getChangeNote()
+            : "Rolled back to version " + req.getTargetVersionNo();
+
+        String insertSql = String.format(
+            "INSERT INTO [%s].[template_version] (id, template_id, version_no, sections, format_rules, change_note, created_by, updated_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            schema
+        );
+        jdbcTemplate.update(insertSql, newVersionId, id, nextVer, target.getSections(), target.getFormatRules(), note, userId, userId);
+
+        // 4. Update template current_version_id
+        String updateTplSql = String.format(
+            "UPDATE [%s].[template] SET current_version_id = ?, updated_by = ?, updated_at = SYSUTCDATETIME() WHERE id = ?",
+            schema
+        );
+        jdbcTemplate.update(updateTplSql, newVersionId, userId, id);
+
+        return getTemplateById(id);
+    }
+
+    public TemplatePreviewResponse previewTemplate(UUID id, TemplatePreviewRequest req) {
+        String sectionsJson = req != null ? req.getSections() : null;
+        String formatRulesJson = req != null ? req.getFormatRules() : null;
+        Map<String, Object> vars = req != null ? req.getVariables() : null;
+
+        if (sectionsJson == null || sectionsJson.isBlank()) {
+            TemplateResponse tpl = getTemplateById(id);
+            sectionsJson = tpl.getSections();
+            if (formatRulesJson == null || formatRulesJson.isBlank()) {
+                formatRulesJson = tpl.getFormatRules();
+            }
+        }
+        return renderPreview(sectionsJson, formatRulesJson, vars);
+    }
+
+    public TemplatePreviewResponse renderPreview(String sectionsJson, String formatRulesJson, Map<String, Object> variables) {
+        validateSections(sectionsJson);
+        if (formatRulesJson != null && !formatRulesJson.isBlank()) {
+            validateJson(formatRulesJson);
+        }
+
+        List<Map<String, Object>> parsedSections = new ArrayList<>();
+        StringBuilder markdown = new StringBuilder();
+
+        try {
+            JsonNode rootNode = objectMapper.readTree(sectionsJson);
+            JsonNode sectionsNode = rootNode.has("sections") ? rootNode.get("sections") : rootNode;
+
+            if (sectionsNode.isArray()) {
+                for (JsonNode sec : sectionsNode) {
+                    Map<String, Object> secMap = objectMapper.convertValue(sec, Map.class);
+                    parsedSections.add(secMap);
+
+                    String title = sec.has("title") ? sec.get("title").asText() : "Section";
+                    String key = sec.has("key") ? sec.get("key").asText() : "";
+                    String placeholder = sec.has("placeholder") ? sec.get("placeholder").asText() : "";
+                    boolean required = sec.has("required") && sec.get("required").asBoolean();
+
+                    markdown.append("## ").append(title);
+                    if (required) {
+                        markdown.append(" *(bắt buộc)*");
+                    }
+                    markdown.append("\n\n");
+
+                    if (variables != null && variables.containsKey(key)) {
+                        markdown.append(variables.get(key)).append("\n\n");
+                    } else if (variables != null && !placeholder.isBlank() && variables.containsKey(placeholder.replaceAll("[{}]", ""))) {
+                        markdown.append(variables.get(placeholder.replaceAll("[{}]", ""))).append("\n\n");
+                    } else if (!placeholder.isBlank()) {
+                        markdown.append("> *Dữ liệu mẫu cho `").append(placeholder).append("`*\n\n");
+                        if (placeholder.contains("endpoint")) {
+                            markdown.append("| Phương thức | Endpoint | Mô tả |\n|---|---|---|\n| `GET` | `/api/v1/sample` | Lấy dữ liệu mẫu |\n\n");
+                        } else if (placeholder.contains("parameter")) {
+                            markdown.append("| Tham số | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| `id` | `UUID` | Có | Định danh bản ghi |\n\n");
+                        } else if (placeholder.contains("class") || placeholder.contains("module")) {
+                            markdown.append("- `SampleService`: Quản lý nghiệp vụ chính\n- `SampleRepository`: Truy vấn dữ liệu\n\n");
+                        } else {
+                            markdown.append("Nội dung được cập nhật tự động từ mã nguồn.\n\n");
+                        }
+                    } else {
+                        markdown.append("Mô tả chi tiết nội dung phần ").append(title).append(".\n\n");
+                    }
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Error rendering preview: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> formatRulesMap = null;
+        if (formatRulesJson != null && !formatRulesJson.isBlank()) {
+            try {
+                formatRulesMap = objectMapper.readValue(formatRulesJson, Map.class);
+            } catch (Exception ignored) {}
+        }
+
+        return new TemplatePreviewResponse(markdown.toString().trim(), parsedSections, formatRulesMap);
+    }
+
+    @Transactional
     public TemplateResponse cloneTemplate(UUID id, String newName) {
         TemplateResponse source = getTemplateById(id);
         CreateTemplateRequest req = new CreateTemplateRequest();
@@ -197,23 +376,37 @@ public class TemplateService {
         );
         int rows = jdbcTemplate.update(sql, userId, id);
         if (rows == 0) {
-            throw new RuntimeException("Template not found: " + id);
+            throw new IllegalArgumentException("Template not found: " + id);
         }
     }
 
     public List<CollectionResponse> listCollections() {
         String schema = TenantContext.getSchema();
         String sql = String.format(
-            "SELECT id, name, description, default_template_id, created_at FROM [%s].[collection] ORDER BY created_at ASC",
-            schema
+            "SELECT c.id, c.name, c.description, c.owner_id, u.email as owner_name, c.default_template_id, t.name as template_name, " +
+            "c.created_at, c.updated_at, (SELECT COUNT(*) FROM [%s].[document] d WHERE d.collection_id = c.id) as doc_count " +
+            "FROM [%s].[collection] c " +
+            "LEFT JOIN [%s].[app_user] u ON u.id = c.owner_id " +
+            "LEFT JOIN [%s].[template] t ON t.id = c.default_template_id " +
+            "ORDER BY c.created_at ASC",
+            schema, schema, schema, schema
         );
-        return jdbcTemplate.query(sql, (rs, rowNum) -> new CollectionResponse(
-            UUID.fromString(rs.getString("id")),
-            rs.getString("name"),
-            rs.getString("description"),
-            rs.getString("default_template_id") != null ? UUID.fromString(rs.getString("default_template_id")) : null,
-            rs.getTimestamp("created_at").toInstant()
-        ));
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            CollectionResponse res = new CollectionResponse();
+            res.setId(UUID.fromString(rs.getString("id")));
+            res.setName(rs.getString("name"));
+            res.setDescription(rs.getString("description"));
+            String ownerStr = rs.getString("owner_id");
+            if (ownerStr != null) res.setOwnerId(UUID.fromString(ownerStr));
+            res.setOwnerName(rs.getString("owner_name"));
+            String tplStr = rs.getString("default_template_id");
+            if (tplStr != null) res.setDefaultTemplateId(UUID.fromString(tplStr));
+            res.setDefaultTemplateName(rs.getString("template_name"));
+            res.setDocumentCount(rs.getLong("doc_count"));
+            res.setCreatedAt(rs.getTimestamp("created_at").toInstant());
+            res.setUpdatedAt(rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null);
+            return res;
+        });
     }
 
     @Transactional
@@ -264,4 +457,3 @@ public class TemplateService {
         }
     }
 }
-

@@ -22,13 +22,13 @@ public class DocumentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    @PreAuthorize("hasAnyRole('Developer', 'Technical Lead', 'Administrator')")
     public ResponseEntity<DocumentResponse> createDocument(@Valid @RequestBody CreateDocumentRequest req) {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(documentService.createDocument(req));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    @PreAuthorize("hasRole('Administrator')")
     public ResponseEntity<Void> deleteDocument(@PathVariable("id") UUID id) {
         documentService.deleteDocument(id);
         return ResponseEntity.noContent().build();
@@ -51,7 +51,7 @@ public class DocumentController {
     }
 
     @PutMapping("/{id}/draft")
-    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    @PreAuthorize("hasAnyRole('Developer', 'Technical Lead', 'Administrator')")
     public ResponseEntity<DocumentVersionResponse> updateDraft(
             @PathVariable("id") UUID id,
             @Valid @RequestBody UpdateDraftRequest req) {
@@ -102,14 +102,27 @@ public class DocumentController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    @PreAuthorize("hasAnyRole('Developer', 'Technical Lead', 'Administrator')")
     public ResponseEntity<Map<String, String>> generateDocument(@Valid @RequestBody GenerateDocRequest req) {
         String jobId = documentService.requestGenerateDocument(req);
+        AiJobResponse job = documentService.getAiJob(UUID.fromString(jobId));
         return ResponseEntity.accepted().body(Map.of(
             "jobId", jobId,
-            "status", "QUEUED",
-            "message", "AI document generation task has been queued."
+            "status", job.status(),
+            "message", job.errorMessage() == null ? "AI document generation task has been queued." : job.errorMessage()
         ));
+    }
+
+    @GetMapping("/generation-jobs/{jobId}")
+    @PreAuthorize("hasAnyRole('Developer', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<AiJobResponse> getGenerationJob(@PathVariable UUID jobId) {
+        return ResponseEntity.ok(documentService.getAiJob(jobId));
+    }
+
+    @PostMapping("/generation-jobs/{jobId}/retry")
+    @PreAuthorize("hasAnyRole('Developer', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<AiJobResponse> retryGenerationJob(@PathVariable UUID jobId) {
+        return ResponseEntity.accepted().body(documentService.retryAiJob(jobId));
     }
 }
 

@@ -9,6 +9,7 @@ public class DocDraftPayload {
     private String title;
     private String pathInRepo;
     private UUID templateId;
+    private UUID templateVersionId;
     private UUID collectionId;
     private UUID ownerId;
     private String markdownContent;
@@ -16,6 +17,7 @@ public class DocDraftPayload {
     private Double overallConfidence;
     private List<EvidenceItem> evidenceList;
     private String sourceCommitSha;
+    private List<UUID> codeEntityIds;
 
     public static class SectionResult {
         private String sectionKey;
@@ -68,6 +70,8 @@ public class DocDraftPayload {
     public void setPathInRepo(String pathInRepo) { this.pathInRepo = pathInRepo; }
     public UUID getTemplateId() { return templateId; }
     public void setTemplateId(UUID templateId) { this.templateId = templateId; }
+    public UUID getTemplateVersionId() { return templateVersionId; }
+    public void setTemplateVersionId(UUID templateVersionId) { this.templateVersionId = templateVersionId; }
     public UUID getCollectionId() { return collectionId; }
     public void setCollectionId(UUID collectionId) { this.collectionId = collectionId; }
     public UUID getOwnerId() { return ownerId; }
@@ -82,5 +86,6 @@ public class DocDraftPayload {
     public void setEvidenceList(List<EvidenceItem> evidenceList) { this.evidenceList = evidenceList; }
     public String getSourceCommitSha() { return sourceCommitSha; }
     public void setSourceCommitSha(String sourceCommitSha) { this.sourceCommitSha = sourceCommitSha; }
+    public List<UUID> getCodeEntityIds() { return codeEntityIds; }
+    public void setCodeEntityIds(List<UUID> codeEntityIds) { this.codeEntityIds = codeEntityIds; }
 }
-

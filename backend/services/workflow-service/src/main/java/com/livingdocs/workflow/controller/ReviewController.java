@@ -30,7 +30,7 @@ public class ReviewController {
 
     /** GEN-10: Developer nộp bản Draft vào duyệt, tạo review_task cấp Staff. */
     @PostMapping("/documents/{id}/submit")
-    @RequireRole({"Developer", "Staff", "Manager", "Technical Lead", "Administrator"})
+    @RequireRole({"Developer", "Technical Lead", "Administrator"})
     public ResponseEntity<ReviewTaskView> submit(@PathVariable UUID id) {
         return ResponseEntity.accepted()
                 .body(reviewService.submit(AuthContext.get().tenant(), id, AuthContext.get()));

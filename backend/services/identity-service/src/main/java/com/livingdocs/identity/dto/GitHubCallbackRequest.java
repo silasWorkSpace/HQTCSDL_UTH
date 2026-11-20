@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Pattern;
 
 public record GitHubCallbackRequest(
         @NotBlank(message = "Code không được để trống") String code,
-        @Pattern(regexp = "^[a-z0-9_]{2,30}$", message = "Mã workspace không hợp lệ") String tenant,
+        @NotBlank(message = "OAuth state không được để trống") String state,
         String redirectUri) {
 }

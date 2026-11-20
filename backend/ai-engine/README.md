@@ -56,7 +56,7 @@ Module phụ trách tích hợp và trừu tượng hóa mô hình ngôn ngữ l
 
 | Biến | Mặc định | Mô tả |
 | :--- | :--- | :--- |
-| `LLM_PROVIDER` | `mock` | Nhà cung cấp LLM (`mock`, `openai`, `gemini`,...) |
+| `LLM_PROVIDER` | `gemini` | Nhà cung cấp LLM (`mock`, `gemini`). Unit test tự đặt `mock` để không gọi dịch vụ bên ngoài. |
 | `LLM_MODEL` | `mock-model-v1` | Tên model sử dụng |
 | `PORT` | `8090` | Cổng dịch vụ FastAPI |
 

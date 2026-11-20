@@ -5,7 +5,7 @@ from typing import Optional
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Node, Parser
 
-from ..models import CodeEntity
+from ..models import CodeEntity, generate_entity_id
 from .base_parser import BaseAstParser
 
 
@@ -126,7 +126,18 @@ class JavaAstParser(BaseAstParser):
         sig_parts.append(class_name)
         signature = " ".join(sig_parts)
 
+        class_id = generate_entity_id(
+            repository_id=repository_id,
+            commit_hash=commit_hash,
+            file_path=file_path,
+            kind="class",
+            name=class_name,
+            signature=signature,
+            parent_id=parent_id,
+        )
+
         entity = CodeEntity(
+            id=class_id,
             name=class_name,
             kind="class",
             file_path=file_path,
@@ -212,17 +223,7 @@ class JavaAstParser(BaseAstParser):
         # Parameters
         params_node = self._get_child_by_type(node, "formal_parameters") or node.child_by_field_name("parameters")
         param_list_strs = []
-        param_entities: list[CodeEntity] = []
-
-        method_entity = CodeEntity(
-            name=method_name,
-            kind="method",
-            file_path=file_path,
-            commit_hash=commit_hash,
-            repository_id=repository_id,
-            parent_id=parent_class_id,
-        )
-
+        raw_params = []
         if params_node:
             for param_child in params_node.children:
                 if param_child.type in ("formal_parameter", "spread_parameter"):
@@ -233,21 +234,56 @@ class JavaAstParser(BaseAstParser):
                         p_type = p_type_node.text.decode("utf-8", errors="ignore") if p_type_node else "var"
                         param_sig = f"{p_type} {p_name}"
                         param_list_strs.append(param_sig)
-
-                        param_entity = CodeEntity(
-                            name=p_name,
-                            kind="parameter",
-                            file_path=file_path,
-                            commit_hash=commit_hash,
-                            repository_id=repository_id,
-                            parent_id=method_entity.id,
-                            signature=param_sig,
-                        )
-                        param_entities.append(param_entity)
+                        raw_params.append((p_name, param_sig))
 
         # Full method signature
         param_str = ", ".join(param_list_strs)
-        method_entity.signature = f"{return_type} {method_name}({param_str})"
+        method_sig = f"{return_type} {method_name}({param_str})"
+
+        method_id = generate_entity_id(
+            repository_id=repository_id,
+            commit_hash=commit_hash,
+            file_path=file_path,
+            kind="method",
+            name=method_name,
+            signature=method_sig,
+            parent_id=parent_class_id,
+        )
+
+        method_entity = CodeEntity(
+            id=method_id,
+            name=method_name,
+            kind="method",
+            file_path=file_path,
+            commit_hash=commit_hash,
+            repository_id=repository_id,
+            parent_id=parent_class_id,
+            signature=method_sig,
+        )
+
+        param_entities: list[CodeEntity] = []
+        for idx, (p_name, param_sig) in enumerate(raw_params):
+            param_id = generate_entity_id(
+                repository_id=repository_id,
+                commit_hash=commit_hash,
+                file_path=file_path,
+                kind="parameter",
+                name=p_name,
+                signature=param_sig,
+                parent_id=method_entity.id,
+                index=idx,
+            )
+            param_entity = CodeEntity(
+                id=param_id,
+                name=p_name,
+                kind="parameter",
+                file_path=file_path,
+                commit_hash=commit_hash,
+                repository_id=repository_id,
+                parent_id=method_entity.id,
+                signature=param_sig,
+            )
+            param_entities.append(param_entity)
 
         # Check for Spring endpoint annotations
         endpoint_entity = self._extract_endpoint(
@@ -284,7 +320,18 @@ class JavaAstParser(BaseAstParser):
                 endpoint_name = f"{http_verb} {full_path}"
                 endpoint_sig = f"{http_verb} {full_path} -> {method_entity.signature}"
 
+                endpoint_id = generate_entity_id(
+                    repository_id=repository_id,
+                    commit_hash=commit_hash,
+                    file_path=file_path,
+                    kind="endpoint",
+                    name=endpoint_name,
+                    signature=endpoint_sig,
+                    parent_id=method_entity.id,
+                )
+
                 return CodeEntity(
+                    id=endpoint_id,
                     name=endpoint_name,
                     kind="endpoint",
                     file_path=file_path,

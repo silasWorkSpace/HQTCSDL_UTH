@@ -16,8 +16,19 @@ AFTER UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-    RAISERROR(N'Bảng source_event là nhật ký sự kiện bất biến (Append-only). Không được phép UPDATE hoặc DELETE.', 16, 1);
-    ROLLBACK TRANSACTION;
+
+    -- Updates and direct event deletion are forbidden. A repository deletion is
+    -- the one allowed cascade cleanup path for its own event history.
+    IF EXISTS (SELECT 1 FROM inserted)
+       OR EXISTS (
+            SELECT 1
+            FROM deleted d
+            JOIN [$(SchemaName)].repository r ON r.id = d.repository_id
+       )
+    BEGIN
+        RAISERROR(N'Bảng source_event là nhật ký bất biến. Chỉ được xóa theo cascade khi repository bị xóa.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END;
 END;
 GO
 

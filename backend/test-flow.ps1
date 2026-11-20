@@ -2,6 +2,14 @@
 # SCRIPT KIỂM THỬ THỦ CÔNG TỰ ĐỘNG HÓA TOÀN BỘ LUỒNG (END-TO-END) LIVINGDOCS
 # Hướng dẫn chạy: Mở PowerShell và gõ: .\test-flow.ps1
 # ==============================================================================
+[CmdletBinding()]
+param(
+    [ValidatePattern('^[a-z0-9_]{2,30}$')]
+    [string]$Tenant = "e2e",
+    [string]$RepositoryFullName = "silasWorkSpace/HQTCSDL_UTH",
+    [string]$ExpectedBranch = "feature/backend-integration-service"
+)
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "=================================================================" -ForegroundColor Cyan
@@ -15,7 +23,7 @@ Write-Host "`n[1/6] Đang lấy JWT Token từ Identity Service (Port 8081)..." 
 
 function Get-DevToken($email, $roles) {
     $body = @{
-        tenant = "demo"
+        tenant = $Tenant
         email  = $email
         roles  = $roles
     } | ConvertTo-Json
@@ -30,6 +38,34 @@ function Invoke-JsonPost($uri, $bodyObj, $headers) {
     return Invoke-RestMethod -Uri $uri -Method Post -Body $bytes -Headers $headers -ContentType "application/json; charset=utf-8"
 }
 
+function Assert-ServiceHealthy($port, $name) {
+    try {
+        $health = Invoke-RestMethod -Uri "http://localhost:$port/actuator/health" -TimeoutSec 5
+        if ($health.status -ne "UP") { throw "status=$($health.status)" }
+    } catch {
+        throw "$name ($port) is not healthy: $($_.Exception.Message)"
+    }
+}
+
+function Assert-AiEngineReady {
+    try {
+        $health = Invoke-RestMethod -Uri "http://localhost:8090/health/readiness" -TimeoutSec 5
+        if ($health.status -ne "UP" -or -not $health.ready) {
+            throw "status=$($health.status); issues=$($health.issues | ConvertTo-Json -Compress)"
+        }
+    } catch {
+        throw "AI Engine (8090) is not ready: $($_.Exception.Message)"
+    }
+}
+
+Write-Host "`n[Preflight] Kiem tra stack E2E va cau hinh GitHub..." -ForegroundColor Yellow
+foreach ($service in @(
+    @{ port = 8081; name = "Identity Service" }, @{ port = 8082; name = "Integration Service" },
+    @{ port = 8083; name = "Document Service" }, @{ port = 8084; name = "Workflow Service" },
+    @{ port = 8086; name = "Notification Service" }
+)) { Assert-ServiceHealthy $service.port $service.name }
+Assert-AiEngineReady
+
 try {
     $DEV_TOKEN = Get-DevToken "developer1@example.com" @("Developer")
     $STAFF_TOKEN = Get-DevToken "staff1@example.com" @("Staff")
@@ -42,25 +78,36 @@ try {
 
 $devHeaders = @{
     "Authorization" = "Bearer $DEV_TOKEN"
-    "X-Tenant"      = "ws_demo"
+    "X-Tenant"      = "ws_$Tenant"
 }
 $staffHeaders = @{
     "Authorization" = "Bearer $STAFF_TOKEN"
-    "X-Tenant"      = "ws_demo"
+    "X-Tenant"      = "ws_$Tenant"
 }
 $mgrHeaders = @{
     "Authorization" = "Bearer $MGR_TOKEN"
-    "X-Tenant"      = "ws_demo"
+    "X-Tenant"      = "ws_$Tenant"
 }
+
+$repositories = Invoke-RestMethod -Uri "http://localhost:8082/api/v1/repositories" -Method Get -Headers $devHeaders
+$targetRepository = @($repositories | Where-Object {
+    $_.fullName -eq $RepositoryFullName -and $_.defaultBranch -eq $ExpectedBranch -and $_.connectionStatus -eq "connected"
+}) | Select-Object -First 1
+if (-not $targetRepository) {
+    throw "Khong co repository connected '$RepositoryFullName' voi nhanh '$ExpectedBranch' trong workspace '$Tenant'."
+}
+Write-Host ">> [OK] Repository sandbox: $($targetRepository.fullName) ($($targetRepository.id))" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # BƯỚC 2: TẠO TÀI LIỆU MỚI (Document Service - Port 8083) - Do Developer thực hiện
 # ------------------------------------------------------------------------------
 Write-Host "`n[2/6] Tạo tài liệu mới trên Document Service (Port 8083)..." -ForegroundColor Yellow
 $docBody = @{
-    title   = "Tài liệu Hướng dẫn Thanh toán API v1.0"
+    repositoryId = $targetRepository.id
+    title   = "E2E Payment API $(Get-Date -Format 'yyyyMMdd-HHmmss')"
     docType = "API_REFERENCE"
-    content = "# Hướng Dẫn Thanh Toán`nAPI v1.0 cung cấp các cổng thanh toán an toàn."
+    pathInRepo = "docs/e2e/payment-api-$(Get-Date -Format 'yyyyMMdd-HHmmss').md"
+    content = "# E2E Payment API`nTai lieu do LivingDocs E2E tao; PR phai duoc giu mo."
 }
 
 $createdDoc = Invoke-JsonPost "http://localhost:8083/api/v1/documents" $docBody $devHeaders
@@ -110,9 +157,13 @@ $mgrDecisionBody = @{
     reason   = "Tài liệu đạt chuẩn chất lượng xuất bản, duyệt ban hành."
 }
 $mgrDecisionRes = Invoke-JsonPost "http://localhost:8084/api/v1/reviews/$MGR_TASK_ID/decisions" $mgrDecisionBody $mgrHeaders
+$publishedCandidate = Invoke-RestMethod -Uri "http://localhost:8083/api/v1/documents/$DOC_ID" -Method Get -Headers $mgrHeaders
+if ($publishedCandidate.docStatus -ne "PENDING_MERGE") {
+    throw "Manager approval phai dua tai lieu vao PENDING_MERGE, nhan duoc '$($publishedCandidate.docStatus)'."
+}
 Write-Host ">> [OK] Manager đã phê duyệt thành công!" -ForegroundColor Green
-Write-Host "   - Trạng thái cuối: APPROVED & PUBLISHED" -ForegroundColor Gray
-Write-Host "   - Đã phát sự kiện Kafka (DOC_PUBLISHED) sang Notification Service!" -ForegroundColor Magenta
+Write-Host "   - Trạng thái: PENDING_MERGE; GitHub PR phai duoc giu mo." -ForegroundColor Gray
+Write-Host "   - Khong merge PR va khong khang dinh Published trong E2E nay." -ForegroundColor Magenta
 
 # ------------------------------------------------------------------------------
 # BƯỚC 6: KIỂM TRA THÔNG BÁO IN-APP (Notification Service - Port 8086)

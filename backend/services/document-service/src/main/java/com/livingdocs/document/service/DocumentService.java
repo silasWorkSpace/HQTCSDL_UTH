@@ -42,24 +42,9 @@ public class DocumentService {
     @Transactional
     public DocumentResponse createDocument(CreateDocumentRequest req) {
         String schema = TenantContext.getSchema();
-        String actorRole = "Developer";
-        UUID actorUserId = null;
-        try {
-            actorRole = SecurityUtils.getCurrentUserRole();
-            actorUserId = SecurityUtils.getCurrentUserId();
-        } catch (Exception ignored) {}
-
-        // Resolve repositoryId: if not provided, pick first available repository in workspace
+        String actorRole = SecurityUtils.getCurrentUserRole();
+        UUID actorUserId = SecurityUtils.getCurrentUserId();
         UUID repoId = req.repositoryId();
-        if (repoId == null) {
-            List<UUID> repos = jdbcTemplate.query(
-                String.format("SELECT TOP 1 id FROM [%s].[repository] ORDER BY created_at ASC", schema),
-                (rs, rn) -> rs.getObject("id", UUID.class)
-            );
-            if (!repos.isEmpty()) {
-                repoId = repos.get(0);
-            }
-        }
 
         // Resolve pathInRepo: if not provided, generate default path
         String pathInRepo = req.pathInRepo();
@@ -72,27 +57,16 @@ public class DocumentService {
             pathInRepo = "docs/" + (sanitized.isBlank() ? "untitled" : sanitized) + "-" + UUID.randomUUID().toString().substring(0, 8) + ".md";
         }
 
-        // Resolve ownerId & actorUserId: ensure user actually exists in app_user table
-        UUID validUserId = actorUserId;
-        if (validUserId != null) {
-            Integer exists = jdbcTemplate.queryForObject(
-                String.format("SELECT COUNT(*) FROM [%s].[app_user] WHERE id = ?", schema),
-                Integer.class,
-                validUserId
-            );
-            if (exists == null || exists == 0) {
-                validUserId = null;
-            }
-        }
-        if (validUserId == null) {
-            List<UUID> users = jdbcTemplate.query(
-                String.format("SELECT TOP 1 id FROM [%s].[app_user] ORDER BY created_at ASC", schema),
-                (rs, rn) -> rs.getObject("id", UUID.class)
-            );
-            if (!users.isEmpty()) {
-                validUserId = users.get(0);
-            }
-        }
+        Integer exists = jdbcTemplate.queryForObject(
+                String.format("SELECT COUNT(*) FROM [%s].[app_user] WHERE id = ? AND status = 'active'", schema),
+                Integer.class, actorUserId);
+        if (exists == null || exists == 0) throw new ApiException(HttpStatus.FORBIDDEN,
+                "Tài khoản không thuộc workspace", "User trong JWT không tồn tại hoặc không còn hoạt động trong workspace này.");
+        Integer repositoryExists = jdbcTemplate.queryForObject(
+                String.format("SELECT COUNT(*) FROM [%s].[repository] WHERE id = ? AND connection_status = 'connected'", schema),
+                Integer.class, repoId);
+        if (repositoryExists == null || repositoryExists == 0) throw new ApiException(HttpStatus.NOT_FOUND,
+                "Không tìm thấy repository", "Repository không tồn tại hoặc đã bị ngắt kết nối trong workspace.");
 
         String callSql = String.format(
             "{CALL [%s].[sp_create_document](?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}",
@@ -100,7 +74,7 @@ public class DocumentService {
         );
 
         final String finalActorRole = actorRole != null ? actorRole : "Developer";
-        final UUID finalActorUserId = validUserId;
+        final UUID finalActorUserId = actorUserId;
         final UUID finalRepoId = repoId;
         final String finalPathInRepo = pathInRepo;
 
@@ -215,6 +189,14 @@ public class DocumentService {
         String schema = TenantContext.getSchema();
         UUID userId = SecurityUtils.getCurrentUserId();
         String role = SecurityUtils.getCurrentUserRole();
+
+        Integer currentVersion = jdbcTemplate.queryForObject(
+                String.format("SELECT v.version_no FROM [%s].[document] d WITH (UPDLOCK, HOLDLOCK) " +
+                        "JOIN [%s].[document_version] v ON v.id = d.current_version_id WHERE d.id = ?", schema, schema),
+                Integer.class, id);
+        if (currentVersion == null) throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài liệu", "Tài liệu không tồn tại.");
+        if (!currentVersion.equals(req.getBaseVersionNo())) throw new ApiException(HttpStatus.CONFLICT,
+                "Bản nháp đã thay đổi", "Phiên bản mới nhất là " + currentVersion + "; hãy tải lại trước khi lưu.");
 
         // Call sp_append_document_version
         String callSql = String.format(
@@ -411,13 +393,117 @@ public class DocumentService {
         String correlationId = UUID.randomUUID().toString();
         String tenant = TenantContext.getTenant();
 
+        if (req.getCommitSha() == null || !req.getCommitSha().matches("[0-9a-fA-F]{40}")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Full commit SHA required",
+                    "Select a completed repository analysis run before generating documentation.");
+        }
+        // FR-GEN-02: resolve FILE, MODULE/PACKAGE, and REPOSITORY against one immutable analyzed commit.
+        String scopeType = req.getScopeType() == null ? "" : req.getScopeType().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("FILE", "MODULE", "REPOSITORY").contains(scopeType)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid generation scope",
+                    "Choose FILE, MODULE, or REPOSITORY.");
+        }
+        String scopeReference = req.getScopeReference() == null ? "" : req.getScopeReference().trim().replace('\\', '/');
+        if (scopeType.equals("REPOSITORY")) scopeReference = "repository";
+        else if (scopeReference.isBlank() || scopeReference.startsWith("/")
+                || Arrays.stream(scopeReference.split("/", -1)).anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid generation scope path",
+                    "File and module scopes must use a normalized repository-relative path.");
+        }
+        List<UUID> selectedIds = req.getCodeEntityIds() == null ? List.of() : req.getCodeEntityIds().stream().distinct().toList();
+        if (selectedIds.size() > 1900) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Too many selected code entities",
+                    "Narrow the generation scope or omit the optional entity selection.");
+        }
+        String safePath = req.getPathInRepo();
+        if (safePath == null || safePath.isBlank() || safePath.startsWith("/") || safePath.contains("\\")
+                || Arrays.stream(safePath.split("/", -1)).anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid documentation path", "The repository path must be relative and contain no traversal segments.");
+        }
+        String schema = TenantContext.getSchema();
+        StringBuilder selectSql = new StringBuilder(String.format("SELECT id, name, kind, signature, file_path FROM [%s].code_entity "
+                + "WHERE repository_id=? AND commit_hash=? AND removed_at IS NULL", schema));
+        List<Object> args = new ArrayList<>();
+        args.add(req.getRepositoryId());
+        args.add(req.getCommitSha());
+        if (scopeType.equals("FILE")) {
+            selectSql.append(" AND file_path=?");
+            args.add(scopeReference);
+        } else if (scopeType.equals("MODULE")) {
+            String modulePrefix = scopeReference.endsWith("/") ? scopeReference : scopeReference + "/";
+            selectSql.append(" AND (file_path=? OR LEFT(file_path, LEN(?))=?)");
+            args.add(scopeReference);
+            args.add(modulePrefix);
+            args.add(modulePrefix);
+        }
+        if (!selectedIds.isEmpty()) {
+            selectSql.append(" AND id IN (").append(String.join(",", Collections.nCopies(selectedIds.size(), "?"))).append(")");
+            args.addAll(selectedIds);
+        }
+        List<Map<String, Object>> selectedEntities = jdbcTemplate.query(selectSql.toString(), (rs, row) -> {
+            Map<String, Object> entity = new LinkedHashMap<>();
+            entity.put("id", rs.getString("id"));
+            entity.put("name", rs.getString("name"));
+            entity.put("kind", rs.getString("kind"));
+            entity.put("signature", rs.getString("signature"));
+            entity.put("file_path", rs.getString("file_path"));
+            return entity;
+        }, args.toArray());
+        if (!selectedIds.isEmpty() && selectedEntities.size() != selectedIds.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Code entities do not match the selected snapshot",
+                    "Every selected entity must belong to this repository, commit SHA, and requested scope.");
+        }
+        if (selectedEntities.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "No indexed code in scope",
+                    "Choose a scope containing code entities from the completed snapshot.");
+        }
+
+        UUID resolvedTemplateVersionId = null;
+        String templateSections = null;
+        String formatRules = null;
+        if (req.getTemplateId() != null) {
+            try {
+                String tplSql = String.format(
+                    "SELECT t.current_version_id, tv.sections, tv.format_rules " +
+                    "FROM [%s].[template] t " +
+                    "LEFT JOIN [%s].[template_version] tv ON tv.id = t.current_version_id " +
+                    "WHERE t.id = ?",
+                    schema, schema
+                );
+                List<Map<String, Object>> tplRows = jdbcTemplate.query(tplSql, (rs, rn) -> {
+                    Map<String, Object> map = new HashMap<>();
+                    String curVerId = rs.getString("current_version_id");
+                    if (curVerId != null) map.put("versionId", UUID.fromString(curVerId));
+                    map.put("sections", rs.getString("sections"));
+                    map.put("formatRules", rs.getString("format_rules"));
+                    return map;
+                }, req.getTemplateId());
+
+                if (!tplRows.isEmpty()) {
+                    resolvedTemplateVersionId = (UUID) tplRows.get(0).get("versionId");
+                    templateSections = (String) tplRows.get(0).get("sections");
+                    formatRules = (String) tplRows.get(0).get("formatRules");
+                }
+            } catch (Exception e) {
+                log.warn("Could not resolve template version for template {}: {}", req.getTemplateId(), e.getMessage());
+            }
+        }
+
         GenerateDocPayload payload = new GenerateDocPayload();
-        payload.setScopeType(req.getScopeType());
-        payload.setScopeReference(req.getScopeReference());
+        payload.setScopeType(scopeType);
+        payload.setScopeReference(scopeReference);
         payload.setRepositoryId(req.getRepositoryId());
         payload.setTemplateId(req.getTemplateId());
+        payload.setTemplateVersionId(resolvedTemplateVersionId);
+        payload.setTemplateSections(templateSections);
+        payload.setFormatRules(formatRules);
         payload.setRequestedBy(SecurityUtils.getCurrentUserId());
         payload.setCommitSha(req.getCommitSha());
+        List<UUID> scopedIds = selectedEntities.stream().map(row -> UUID.fromString((String) row.get("id"))).toList();
+        payload.setCodeEntityIds(scopedIds);
+        payload.setEntities(selectedEntities);
+        payload.setTitle(req.getTitle().trim());
+        payload.setPathInRepo(safePath);
 
         EventEnvelope<GenerateDocPayload> envelope = new EventEnvelope<>(
             "GENERATE_DOC",
@@ -426,8 +512,60 @@ public class DocumentService {
             payload
         );
 
-        kafkaTemplate.send("ld.ai-jobs", correlationId, envelope);
+        UUID jobId = UUID.fromString(correlationId);
+        String requestJson;
+        try {
+            requestJson = objectMapper.writeValueAsString(envelope);
+        } catch (Exception ex) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not serialize AI job", "Retry the document generation request.");
+        }
+        jdbcTemplate.update("INSERT INTO [" + schema + "].ai_job "
+                        + "(id, job_type, status, correlation_id, request_payload, created_by) "
+                        + "VALUES (?, 'doc_generation', 'pending', ?, ?, ?)",
+                jobId, jobId, requestJson, SecurityUtils.getCurrentUserId());
+        try {
+            kafkaTemplate.send("ld.ai-jobs", correlationId, envelope).get();
+        } catch (Exception ex) {
+            jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='failed', in_dlq=1, "
+                    + "error_message='Could not publish AI job to the queue', updated_at=SYSUTCDATETIME() WHERE id=?", jobId);
+            log.warn("Could not publish document generation job {}", jobId);
+        }
         return correlationId;
+    }
+
+    public AiJobResponse getAiJob(UUID jobId) {
+        String schema = TenantContext.getSchema();
+        return jdbcTemplate.query("SELECT id, job_type, status, retry_count, in_dlq, next_retry_at, error_message, "
+                        + "result_document_id, created_at, updated_at FROM [" + schema + "].ai_job "
+                        + "WHERE id=? AND job_type='doc_generation'",
+                (rs, row) -> new AiJobResponse(rs.getObject("id", UUID.class), rs.getString("job_type"),
+                        rs.getString("status"), rs.getInt("retry_count"), rs.getBoolean("in_dlq"),
+                        rs.getTimestamp("next_retry_at") == null ? null : rs.getTimestamp("next_retry_at").toInstant(),
+                        rs.getString("error_message"), rs.getObject("result_document_id", UUID.class),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at") == null ? null : rs.getTimestamp("updated_at").toInstant()),
+                jobId).stream().findFirst().orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
+                "AI job not found", "The generation job does not exist in this workspace."));
+    }
+
+    public AiJobResponse retryAiJob(UUID jobId) {
+        String schema = TenantContext.getSchema();
+        List<String> payloads = jdbcTemplate.query("SELECT request_payload FROM [" + schema + "].ai_job "
+                        + "WHERE id=? AND job_type='doc_generation' AND status='failed' AND in_dlq=1",
+                (rs, row) -> rs.getString(1), jobId);
+        if (payloads.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "AI job cannot be retried", "Only failed jobs can be retried.");
+        String raw = payloads.get(0);
+        jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='pending', retry_count=0, in_dlq=0, "
+                + "next_retry_at=NULL, error_message=NULL, updated_at=SYSUTCDATETIME() WHERE id=?", jobId);
+        try {
+            EventEnvelope<?> envelope = objectMapper.readValue(raw, EventEnvelope.class);
+            kafkaTemplate.send("ld.ai-jobs", jobId.toString(), envelope).get();
+        } catch (Exception ex) {
+            jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='failed', in_dlq=1, "
+                    + "error_message='Could not publish AI job to the queue', updated_at=SYSUTCDATETIME() WHERE id=?", jobId);
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI queue unavailable", "Could not queue the retry. Try again later.");
+        }
+        return getAiJob(jobId);
     }
 
     @Transactional
@@ -437,6 +575,14 @@ public class DocumentService {
 
         TenantContext.setTenant(envelope.getTenant() != null ? envelope.getTenant() : "demo");
         String schema = TenantContext.getSchema();
+        UUID jobId;
+        try { jobId = UUID.fromString(envelope.getCorrelationId()); }
+        catch (Exception ex) { throw new IllegalArgumentException("DOC_DRAFT correlationId must identify its AI job", ex); }
+        List<UUID> existingResult = jdbcTemplate.query("SELECT result_document_id FROM [" + schema
+                        + "].ai_job WHERE id=? AND job_type='doc_generation'",
+                (rs, row) -> rs.getObject(1, UUID.class), jobId);
+        if (existingResult.isEmpty()) throw new IllegalStateException("AI generation job does not exist");
+        if (existingResult.get(0) != null) return;
 
         // Stored procedure sp_create_document has 18 parameters (16 IN, 2 OUT)
         String callSql = String.format(
@@ -472,7 +618,26 @@ public class DocumentService {
             }
         });
 
+        if (createdDocId == null) throw new IllegalStateException("Document procedure returned no document ID");
+
         if (createdDocId != null) {
+            UUID tplVerId = p.getTemplateVersionId();
+            if (tplVerId == null && p.getTemplateId() != null) {
+                try {
+                    String tplSql = String.format("SELECT current_version_id FROM [%s].[template] WHERE id = ?", schema);
+                    List<UUID> vids = jdbcTemplate.query(tplSql, (rs, rn) -> rs.getString(1) != null ? UUID.fromString(rs.getString(1)) : null, p.getTemplateId());
+                    if (!vids.isEmpty() && vids.get(0) != null) {
+                        tplVerId = vids.get(0);
+                    }
+                } catch (Exception ignored) {}
+            }
+            if (tplVerId != null) {
+                try {
+                    String updVer = String.format("UPDATE [%s].[document_version] SET template_version_id = ? WHERE document_id = ? AND version_no = 1", schema);
+                    jdbcTemplate.update(updVer, tplVerId, createdDocId);
+                } catch (Exception ignored) {}
+            }
+
             // 1. Link commit SHA to document (FR-GEN-04 / KB-02)
             if (p.getSourceCommitSha() != null && !p.getSourceCommitSha().isBlank()) {
                 try {
@@ -486,47 +651,36 @@ public class DocumentService {
                 }
             }
 
-            // 2. Link Code Entities from evidence list (FR-GEN-04 / KB-05)
-            if (p.getEvidenceList() != null && !p.getEvidenceList().isEmpty() && p.getRepositoryId() != null) {
-                for (DocDraftPayload.EvidenceItem ev : p.getEvidenceList()) {
-                    if (ev.getEntityName() != null && !ev.getEntityName().isBlank()) {
-                        try {
-                            String findEntitySql = String.format(
-                                "SELECT TOP 1 id FROM [%s].[code_entity] WHERE repository_id = ? AND name = ? AND removed_at IS NULL",
-                                schema
-                            );
-                            List<UUID> matching = jdbcTemplate.query(findEntitySql, (rs, rn) -> UUID.fromString(rs.getString("id")), p.getRepositoryId(), ev.getEntityName());
-                            if (!matching.isEmpty()) {
-                                String insCodeLink = String.format(
-                                    "INSERT INTO [%s].[doc_code_link] (document_id, link_type, code_entity_id) VALUES (?, 'CODE_ENTITY', ?)",
-                                    schema
-                                );
-                                jdbcTemplate.update(insCodeLink, createdDocId, matching.get(0));
-                            }
-                        } catch (Exception ex) {
-                            log.debug("Skipping duplicate or missing code link: {}", ex.getMessage());
-                        }
-                    }
+            // Link every scoped entity from the immutable snapshot; chunk statements under SQL Server's parameter limit.
+            if (p.getCodeEntityIds() != null && !p.getCodeEntityIds().isEmpty()
+                    && p.getRepositoryId() != null && p.getSourceCommitSha() != null) {
+                List<UUID> entityIds = p.getCodeEntityIds().stream().distinct().toList();
+                List<UUID> verified = new ArrayList<>();
+                for (int start = 0; start < entityIds.size(); start += 1800) {
+                    List<UUID> batch = entityIds.subList(start, Math.min(start + 1800, entityIds.size()));
+                    String idMarks = String.join(",", Collections.nCopies(batch.size(), "?"));
+                    String verifySql = String.format(
+                        "SELECT id FROM [%s].[code_entity] WHERE repository_id=? AND commit_hash=? AND removed_at IS NULL AND id IN (%s)",
+                        schema, idMarks);
+                    List<Object> verifyArgs = new ArrayList<>();
+                    verifyArgs.add(p.getRepositoryId());
+                    verifyArgs.add(p.getSourceCommitSha());
+                    verifyArgs.addAll(batch);
+                    verified.addAll(jdbcTemplate.query(verifySql,
+                        (rs, row) -> UUID.fromString(rs.getString("id")), verifyArgs.toArray()));
                 }
+                if (verified.size() != entityIds.size()) {
+                    throw new IllegalStateException("Generated draft references entities outside its source snapshot");
+                }
+                String insertLink = String.format(
+                    "INSERT INTO [%s].[doc_code_link] (document_id, link_type, code_entity_id) VALUES (?, 'CODE_ENTITY', ?)", schema);
+                List<Object[]> linkArgs = verified.stream().map(entityId -> new Object[] { createdDocId, entityId }).toList();
+                jdbcTemplate.batchUpdate(insertLink, linkArgs);
             }
 
-            // 3. Save initial update_suggestion with confidence & evidence (FR-GEN-08, 09)
-            try {
-                String checkSugSql = String.format("SELECT 1 FROM sys.tables WHERE object_id = OBJECT_ID('[%s].[update_suggestion]')", schema);
-                List<Integer> hasSug = jdbcTemplate.query(checkSugSql, (rs, rn) -> 1);
-                if (!hasSug.isEmpty()) {
-                    double conf = p.getOverallConfidence() != null ? Math.min(1.0, Math.max(0.0, p.getOverallConfidence())) : 0.90;
-                    String evidenceJson = p.getEvidenceList() != null ? objectMapper.writeValueAsString(p.getEvidenceList()) : null;
-                    String insSugSql = String.format(
-                        "INSERT INTO [%s].[update_suggestion] (document_id, origin, content, confidence_score, evidence, status, auto_apply_eligible) " +
-                        "VALUES (?, 'AI_GENERATION', ?, ?, ?, 'Accepted', 0)",
-                        schema
-                    );
-                    jdbcTemplate.update(insSugSql, createdDocId, p.getMarkdownContent(), conf, evidenceJson);
-                }
-            } catch (Exception ex) {
-                log.warn("Could not save initial update_suggestion: {}", ex.getMessage());
-            }
+            jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='completed', result_document_id=?, "
+                    + "error_message=NULL, updated_at=SYSUTCDATETIME() WHERE id=? AND result_document_id IS NULL",
+                    createdDocId, jobId);
         }
     }
 
@@ -573,6 +727,10 @@ public class DocumentService {
         res.setReason(rs.getString("reason"));
         int rbVer = rs.getInt("rolled_back_from_version_no");
         if (!rs.wasNull()) res.setRolledBackFromVersionNo(rbVer);
+        try {
+            String tvId = rs.getString("template_version_id");
+            if (tvId != null) res.setTemplateVersionId(UUID.fromString(tvId));
+        } catch (Exception ignored) {}
         res.setCreatedAt(rs.getTimestamp("created_at").toInstant());
         return res;
     }

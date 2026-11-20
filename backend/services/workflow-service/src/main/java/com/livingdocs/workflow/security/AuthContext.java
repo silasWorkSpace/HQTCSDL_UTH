@@ -11,7 +11,16 @@ import java.util.UUID;
  */
 public final class AuthContext {
 
-    public record CurrentUser(UUID userId, String tenant, List<String> roles) {
+    public record CurrentUser(UUID userId, String tenant, List<String> roles, String bearerToken) {
+
+        public CurrentUser(UUID userId, String tenant, List<String> roles) {
+            this(userId, tenant, roles, null);
+        }
+
+        @Override
+        public String toString() {
+            return "CurrentUser[userId=" + userId + ", tenant=" + tenant + ", roles=" + roles + "]";
+        }
 
         public boolean hasAnyRole(String... allowed) {
             return roles != null && Set.of(allowed).stream().anyMatch(roles::contains);

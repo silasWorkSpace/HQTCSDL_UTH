@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -12,8 +12,14 @@ export default function OAuthCallbackPage() {
 
   const [status, setStatus] = useState('processing'); // 'processing' | 'success' | 'error'
   const [errorMessage, setErrorMessage] = useState(null);
+  const callbackStarted = useRef(false);
 
   useEffect(() => {
+    // React.StrictMode replays effects in development. OAuth state is single-use,
+    // so only the first effect may exchange the authorization code.
+    if (callbackStarted.current) return;
+    callbackStarted.current = true;
+
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const error = searchParams.get('error');
@@ -31,22 +37,17 @@ export default function OAuthCallbackPage() {
       return;
     }
 
-    const tenant = state || localStorage.getItem('ld_tenant') || 'demo';
     const redirectUri = `${window.location.origin}/auth/callback`;
 
     // Gọi backend exchange code lấy JWT Token
     authApi
-      .callbackGitHub({ code, tenant, redirectUri })
+      .callbackGitHub({ code, state, redirectUri })
       .then((res) => {
-        if (res.accessToken) {
-          localStorage.setItem('ld_token', res.accessToken);
-          if (res.refreshToken) localStorage.setItem('ld_refresh_token', res.refreshToken);
-          if (res.githubAccessToken) localStorage.setItem('ld_github_token', res.githubAccessToken);
-          localStorage.setItem('ld_tenant', tenant);
-
-          // Cập nhật role mặc định Developer cho phiên mới
-          localStorage.setItem('ld_role', 'Developer');
-          window.dispatchEvent(new Event('storage'));
+        if (res.authenticated) {
+          localStorage.removeItem('ld_token');
+          localStorage.removeItem('ld_refresh_token');
+          if (res.githubConnectionId) localStorage.setItem('ld_github_connection_id', res.githubConnectionId);
+          window.dispatchEvent(new Event('livingdocs:session-changed'));
 
           setStatus('success');
           setTimeout(() => {
@@ -57,21 +58,6 @@ export default function OAuthCallbackPage() {
         }
       })
       .catch((err) => {
-        // Fallback mềm cho môi trường dev khi backend chưa bật hoặc chưa kịp rebuild JAR
-        if (code && code.startsWith('mock_')) {
-          console.warn('Backend chưa phản hồi, thiết lập phiên đăng nhập demo cho Dev:', err);
-          const mockJwt = 'mock_dev_jwt_token_for_github_' + Date.now();
-          localStorage.setItem('ld_token', mockJwt);
-          localStorage.setItem('ld_tenant', tenant);
-          localStorage.setItem('ld_role', 'Developer');
-          window.dispatchEvent(new Event('storage'));
-          setStatus('success');
-          setTimeout(() => {
-            navigate('/documents', { replace: true });
-          }, 1000);
-          return;
-        }
-
         setStatus('error');
         setErrorMessage(
           err?.detail || err?.message || 'Quá trình xác thực với GitHub gặp sự cố. Vui lòng kiểm tra cấu hình Client ID và Backend.'

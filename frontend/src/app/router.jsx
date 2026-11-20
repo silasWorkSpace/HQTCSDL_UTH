@@ -20,6 +20,10 @@ import ReviewPage from '../features/reviews/ReviewPage';
 import SuggestionQueuePage from '../features/suggestions/SuggestionQueuePage';
 import DriftHistoryPage from '../features/suggestions/DriftHistoryPage';
 
+// Governance Pages
+import GovernanceDashboardPage from '../features/governance/pages/GovernanceDashboardPage';
+import PolicyManagementPage from '../features/governance/pages/PolicyManagementPage';
+
 // Auth Pages (FR-AUTH-02)
 import LoginPage from '../features/auth/pages/LoginPage';
 import OAuthCallbackPage from '../features/auth/pages/OAuthCallbackPage';
@@ -51,6 +55,10 @@ export function AppRoutes({ activeRole }) {
       <Route path={ROUTES.SUGGESTIONS} element={<SuggestionQueuePage activeRole={activeRole} />} />
       <Route path="/drift-history" element={<DriftHistoryPage activeRole={activeRole} />} />
       <Route path="/documents/:id/drift" element={<DriftHistoryPage activeRole={activeRole} />} />
+
+      {/* Governance Routes */}
+      <Route path={ROUTES.GOVERNANCE_DASHBOARD} element={<GovernanceDashboardPage activeRole={activeRole} />} />
+      <Route path={ROUTES.GOVERNANCE_POLICIES} element={<PolicyManagementPage activeRole={activeRole} />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to={ROUTES.DOCUMENTS} replace />} />

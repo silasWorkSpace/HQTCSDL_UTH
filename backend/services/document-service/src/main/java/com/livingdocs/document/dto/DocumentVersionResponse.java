@@ -19,6 +19,7 @@ public class DocumentVersionResponse {
     private String reason;
     private Integer rolledBackFromVersionNo;
     private Boolean requiresReview;
+    private UUID templateVersionId;
     private Instant createdAt;
 
     public DocumentVersionResponse() {}
@@ -53,7 +54,8 @@ public class DocumentVersionResponse {
     public void setRolledBackFromVersionNo(Integer rolledBackFromVersionNo) { this.rolledBackFromVersionNo = rolledBackFromVersionNo; }
     public Boolean getRequiresReview() { return requiresReview; }
     public void setRequiresReview(Boolean requiresReview) { this.requiresReview = requiresReview; }
+    public UUID getTemplateVersionId() { return templateVersionId; }
+    public void setTemplateVersionId(UUID templateVersionId) { this.templateVersionId = templateVersionId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }
-

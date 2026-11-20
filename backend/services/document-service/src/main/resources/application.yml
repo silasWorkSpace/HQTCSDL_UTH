@@ -6,8 +6,8 @@ spring:
     name: document-service
   datasource:
     url: ${DB_URL:jdbc:sqlserver://localhost:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false}
-    username: ${DB_USER:sa}
-    password: ${DB_PASSWORD:Living_Docs_2026!}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   kafka:
     bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
@@ -22,9 +22,13 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
+    secret: ${JWT_SECRET}
 
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:

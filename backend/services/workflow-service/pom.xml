@@ -18,6 +18,10 @@
     <dependencies>
         <dependency>
             <groupId>com.livingdocs</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.livingdocs</groupId>
             <artifactId>common-events</artifactId>
         </dependency>
         <dependency>

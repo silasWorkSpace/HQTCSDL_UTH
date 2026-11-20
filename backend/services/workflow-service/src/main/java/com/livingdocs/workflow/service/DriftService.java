@@ -65,31 +65,27 @@ public class DriftService {
             return;
         }
 
+        boolean newAlert = false;
         for (JsonNode finding : payload.path("findings")) {
             String driftType = finding.path("driftType").asText();
             String severity = finding.path("severity").asText();
             String evidence = finding.path("evidence").toString();
 
-            // Bỏ qua nếu alert cùng (source_event, document, type) đã có — idempotent
-            boolean exists = repo.listDriftAlerts(tenant, documentId).stream()
-                    .anyMatch(a -> sourceEventId.equals(a.get("source_event_id"))
-                            && driftType.equals(a.get("drift_type")));
-            UUID alertId = null;
-            if (!exists) {
-                alertId = repo.createDriftAlert(tenant, sourceEventId, documentId, driftType,
-                        severity, evidence, "Open");
-            } else {
-                log.info("Drift alert trung lap bo qua: doc={} type={}", documentId, driftType);
-            }
+            WorkflowRepository.DriftAlertInsert alert = repo.createDriftAlert(tenant, sourceEventId, documentId, driftType,
+                    severity, evidence, "Open");
+            UUID alertId = alert.id();
+            newAlert |= alert.created();
 
             JsonNode suggestion = finding.path("suggestion");
             if (!suggestion.isMissingNode() && !suggestion.isNull()) {
                 BigDecimal confidence = new BigDecimal(
                         suggestion.path("confidence").asText("0.5"));
-                UUID suggestionId = repo.createUpdateSuggestion(tenant, documentId, alertId,
+                WorkflowRepository.SuggestionInsert inserted = repo.createUpdateSuggestion(tenant, documentId, alertId,
                         "drift", suggestion.path("content").asText(), confidence, evidence);
-                // FR-DR-17: bản cũ cùng tài liệu → Superseded, chỉ giữ bản mới nhất
-                repo.supersedeStaleSuggestions(tenant, documentId, suggestionId);
+                if (inserted.created()) {
+                    // FR-DR-17: bản cũ cùng tài liệu → Superseded, chỉ giữ bản mới nhất
+                    repo.supersedeStaleSuggestions(tenant, documentId, inserted.id());
+                }
             }
         }
 
@@ -105,10 +101,12 @@ public class DriftService {
             }
         }
 
-        audit.record(tenant, null, null, "DRIFT_FOUND", "document", documentId, null,
-                "{\"sourceEventId\":\"" + sourceEventId + "\"}");
-        notify.notifyUser(tenant, doc.ownerId(), "DRIFT_FOUND",
-                "Phát hiện drift trên tài liệu \"" + doc.title() + "\"", null);
+        if (newAlert) {
+            audit.record(tenant, null, null, "DRIFT_FOUND", "document", documentId, null,
+                    "{\"sourceEventId\":\"" + sourceEventId + "\"}");
+            notify.notifyUser(tenant, doc.ownerId(), "DRIFT_FOUND",
+                    "Phát hiện drift trên tài liệu \"" + doc.title() + "\"", null);
+        }
         log.info("Da xu ly DRIFT_FOUND: doc={} findings={}", documentId,
                 payload.path("findings").size());
     }

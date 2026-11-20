@@ -38,7 +38,7 @@ Cần SQL Server đã dựng bằng `infra/db.ps1` (đã tạo tenant, ví dụ 
 
 Kafka: nhận `DRIFT_FOUND` (payload `{documentId, sourceEventId, findings:[{driftType, severity, evidence, suggestion:{content, confidence}}]}`), gửi `NOTIFICATION` tới `ld.notifications`.
 
-Publish tuần này là giả lập (`PublishSimulator`): `APPROVED → PENDING_MERGE → PUBLISHED`.
+Manager approval now calls Integration Service to create/update the document path on the connected GitHub repository's default branch. The workflow only transitions to `PUBLISHED` after GitHub returns success and stores the resulting commit SHA in `document_version.source_commit_sha`. Protected branches that reject direct writes return an error and do not mark the document published.
 
 ## Test
 

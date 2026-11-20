@@ -1,125 +1,52 @@
-import { Button, Empty, Progress, Result, Segmented, Skeleton, Space, Table, Tag, Typography } from 'antd'
-import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
-import SeverityBadge from '../../components/SeverityBadge'
-import { formatDateTime, slug } from '../shared/format'
-import { ALL_STATUSES, SUGGESTION_STATUS } from './constants'
-import { useSuggestions } from './hooks'
-import { confidencePercent, sortSuggestions } from './model'
+import { useEffect, useMemo, useState } from 'react'
 import SuggestionDrawer from './SuggestionDrawer'
-
-const STATUS_COLOR = {
-  [SUGGESTION_STATUS.PENDING]: 'processing',
-  [SUGGESTION_STATUS.ACCEPTED]: 'success',
-  [SUGGESTION_STATUS.DISMISSED]: 'default',
-  [SUGGESTION_STATUS.SUPERSEDED]: 'default',
-}
+import { listSuggestions } from '../../services/workflowApi'
+import { ALL_STATUSES, SUGGESTION_STATUS } from './constants'
+import { normalizeSuggestion, sortSuggestions } from './model'
 
 export default function SuggestionQueuePage() {
-  const { t, i18n } = useTranslation()
-  const [params, setParams] = useSearchParams()
-  const status = params.get('status') ?? SUGGESTION_STATUS.PENDING
-  const selectedId = params.get('id')
+  const [status, setStatus] = useState(SUGGESTION_STATUS.PENDING)
+  const [rows, setRows] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refresh, setRefresh] = useState(0)
 
-  const query = useSuggestions(status === ALL_STATUSES ? undefined : status)
-  const rows = useMemo(() => sortSuggestions(query.data ?? []), [query.data])
-  const selected = rows.find((row) => row.id === selectedId) ?? null
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    listSuggestions(status === ALL_STATUSES ? undefined : status)
+      .then((items) => { if (active) setRows(sortSuggestions((items || []).map(normalizeSuggestion))) })
+      .catch((e) => { if (active) setError(e?.detail || e?.message || 'Không tải được gợi ý drift.') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [status, refresh])
 
-  const update = (mutate) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      mutate(next)
-      return next
-    })
-  const setStatus = (value) => update((p) => { p.set('status', value); p.delete('id') })
-  const openRow = (id) => update((p) => p.set('id', id))
-  const closeDrawer = () => update((p) => p.delete('id'))
-
-  const columns = [
-    {
-      title: t('suggestions.columns.document'),
-      dataIndex: 'documentTitle',
-      render: (title, row) => <Button type="link" onClick={() => openRow(row.id)} style={{ padding: 0 }}>{title || row.documentId}</Button>,
-    },
-    {
-      title: t('suggestions.columns.origin'),
-      dataIndex: 'origin',
-      render: (origin) => <Tag>{t(`suggestions.origin.${slug(origin)}`, { defaultValue: origin })}</Tag>,
-    },
-    { title: t('suggestions.columns.severity'), dataIndex: 'topSeverity', render: (s) => <SeverityBadge severity={s} /> },
-    {
-      title: t('suggestions.columns.confidence'),
-      dataIndex: 'confidence',
-      render: (c) => (c == null ? '—' : <Progress percent={confidencePercent(c)} size="small" style={{ minWidth: 120 }} />),
-    },
-    { title: t('suggestions.columns.createdAt'), dataIndex: 'createdAt', render: (v) => formatDateTime(v, i18n.language) },
-    {
-      title: t('suggestions.columns.status'),
-      dataIndex: 'status',
-      render: (s) => <Tag color={STATUS_COLOR[s] ?? 'default'}>{t(`suggestions.status.${slug(s)}`, { defaultValue: s })}</Tag>,
-    },
-    {
-      title: t('suggestions.columns.action'),
-      key: 'action',
-      render: (_, row) => <Button size="small" onClick={() => openRow(row.id)}>{t('suggestions.open')}</Button>,
-    },
-  ]
-
-  const statusOptions = [
-    ...Object.values(SUGGESTION_STATUS).map((value) => ({ value, label: t(`suggestions.status.${slug(value)}`) })),
-    { value: ALL_STATUSES, label: t('suggestions.statusAll') },
-  ]
-
-  let body
-  if (query.isPending) {
-    body = <Skeleton active paragraph={{ rows: 6 }} />
-  } else if (query.isError) {
-    body = (
-      <Result
-        status="error"
-        title={t('suggestions.error.title')}
-        subTitle={query.error?.response?.data?.detail}
-        extra={<Button type="primary" onClick={() => query.refetch()}>{t('workflow.retry')}</Button>}
-      />
-    )
-  } else {
-    body = (
-      // Bảng rộng cuộn ngang trong khung riêng, không làm cuộn cả trang (NFR-USAB-01).
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={rows}
-        scroll={{ x: 'max-content' }}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
-        locale={{
-          emptyText: (
-            <Empty
-              description={
-                <>
-                  <strong>{t('suggestions.empty.title')}</strong>
-                  <br />
-                  {status === SUGGESTION_STATUS.PENDING ? t('suggestions.empty.pending') : t('suggestions.empty.other')}
-                </>
-              }
-            />
-          ),
-        }}
-      />
-    )
-  }
-
+  const selectedRow = useMemo(() => rows.find((row) => row.id === selected) ?? null, [rows, selected])
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('suggestions.title')}</Typography.Title>
-        <Typography.Text type="secondary">{t('suggestions.subtitle')}</Typography.Text>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <Segmented aria-label={t('suggestions.statusFilter')} options={statusOptions} value={status} onChange={setStatus} />
-      </div>
-      {body}
-      <SuggestionDrawer suggestion={selected} onClose={closeDrawer} />
-    </Space>
+    <main style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+      <h1>Gợi ý cập nhật từ drift</h1>
+      <p>Chỉ các thay đổi code đã liên kết với tài liệu mới xuất hiện tại đây.</p>
+      <label style={{ display: 'grid', gap: 6, maxWidth: 340, margin: '16px 0' }}>Trạng thái
+        <select className="ld-select" value={status} onChange={(event) => setStatus(event.target.value)}>
+          {[SUGGESTION_STATUS.PENDING, SUGGESTION_STATUS.ACCEPTED, SUGGESTION_STATUS.DISMISSED,
+            SUGGESTION_STATUS.SUPERSEDED, ALL_STATUSES].map((item) => <option key={item} value={item}>{item === ALL_STATUSES ? 'Tất cả' : item}</option>)}
+        </select>
+      </label>
+      {loading && <p role="status">Đang tải…</p>}
+      {error && <div role="alert" style={{ color: '#b91c1c' }}>{error} <button onClick={() => setRefresh((n) => n + 1)}>Thử lại</button></div>}
+      {!loading && !error && !rows.length && <p>Chưa có gợi ý ở trạng thái này.</p>}
+      {!loading && rows.map((row) => (
+        <button key={row.id} type="button" onClick={() => setSelected(row.id)} className="ld-card"
+          style={{ display: 'block', width: '100%', textAlign: 'left', margin: '10px 0', padding: 16, cursor: 'pointer' }}>
+          <strong>{row.documentTitle || row.documentId}</strong>
+          <span style={{ float: 'right' }}>{row.status}</span>
+          <div style={{ marginTop: 8, color: '#475569' }}>{row.topSeverity || 'Severity pending'} · {row.origin} · {row.confidence == null ? '—' : `${Math.round(row.confidence * 100)}% confidence`}</div>
+          <div style={{ marginTop: 8 }}>{row.content.slice(0, 220)}{row.content.length > 220 ? '…' : ''}</div>
+        </button>
+      ))}
+      <SuggestionDrawer suggestion={selectedRow} onClose={() => setSelected(null)} onDone={() => { setSelected(null); setRefresh((n) => n + 1) }} />
+    </main>
   )
 }

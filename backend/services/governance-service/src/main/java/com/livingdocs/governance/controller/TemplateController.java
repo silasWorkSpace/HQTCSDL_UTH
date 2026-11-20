@@ -1,8 +1,6 @@
 package com.livingdocs.governance.controller;
 
-import com.livingdocs.governance.dto.CollectionResponse;
-import com.livingdocs.governance.dto.CreateTemplateRequest;
-import com.livingdocs.governance.dto.TemplateResponse;
+import com.livingdocs.governance.dto.*;
 import com.livingdocs.governance.service.TemplateService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -41,12 +39,41 @@ public class TemplateController {
         return ResponseEntity.ok(templateService.getTemplateById(id));
     }
 
+    @GetMapping("/templates/{id}/versions")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<List<TemplateVersionResponse>> getTemplateVersions(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(templateService.getTemplateVersions(id));
+    }
+
     @PutMapping("/templates/{id}")
     @PreAuthorize("hasAnyRole('Technical Lead', 'Manager', 'Administrator')")
     public ResponseEntity<TemplateResponse> updateTemplate(
             @PathVariable("id") UUID id,
             @Valid @RequestBody CreateTemplateRequest req) {
         return ResponseEntity.ok(templateService.updateTemplate(id, req));
+    }
+
+    @PostMapping("/templates/{id}/rollback")
+    @PreAuthorize("hasAnyRole('Technical Lead', 'Manager', 'Administrator')")
+    public ResponseEntity<TemplateResponse> rollbackTemplate(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody RollbackTemplateRequest req) {
+        return ResponseEntity.ok(templateService.rollbackTemplate(id, req));
+    }
+
+    @PostMapping("/templates/{id}/preview")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<TemplatePreviewResponse> previewTemplate(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) TemplatePreviewRequest req) {
+        return ResponseEntity.ok(templateService.previewTemplate(id, req));
+    }
+
+    @PostMapping("/templates/preview")
+    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
+    public ResponseEntity<TemplatePreviewResponse> previewTemplateDirect(
+            @RequestBody TemplatePreviewRequest req) {
+        return ResponseEntity.ok(templateService.renderPreview(req.getSections(), req.getFormatRules(), req.getVariables()));
     }
 
     @DeleteMapping("/templates/{id}")
@@ -70,11 +97,4 @@ public class TemplateController {
         templateService.seedDefaultTemplatesAndCollection();
         return ResponseEntity.ok().build();
     }
-
-    @GetMapping("/collections")
-    @PreAuthorize("hasAnyRole('Developer', 'Staff', 'Manager', 'Technical Lead', 'Administrator')")
-    public ResponseEntity<List<CollectionResponse>> listCollections() {
-        return ResponseEntity.ok(templateService.listCollections());
-    }
 }
-

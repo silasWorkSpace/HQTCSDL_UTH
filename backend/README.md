@@ -37,15 +37,16 @@ backend/
 
 ### KỊCH BẢN 1: QUY TRÌNH PHÊ DUYỆT TÀI LIỆU 2 CẤP & NHẬN THÔNG BÁO KAFKA
 
-#### Bước 1: Lấy Token cấp quyền (Identity Service - Port 8081)
-1. Mở [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html).
-2. Vào nhóm **`dev-token-controller`** $\rightarrow$ `POST /api/v1/auth/dev-token`.
-3. Bấm **Try it out**, nhập JSON tạo token cho Developer:
+#### Bước 1: Lấy token thử nghiệm (chỉ profile `dev`)
+`/api/v1/auth/dev-token` không được đăng ký khi service chạy profile production. Chỉ dùng endpoint này với dữ liệu local không nhạy cảm.
+
+1. Khởi động Identity Service với profile `dev`.
+2. Gọi `POST /api/v1/auth/dev-token` với payload:
    ```json
    {
-     "userId": "11111111-1111-1111-1111-111111111111",
-     "role": "Developer",
-     "tenant": "demo"
+     "tenant": "demo",
+     "email": "developer1@example.com",
+     "roles": ["Developer"]
    }
    ```
 4. Bấm **Execute**. Copy chuỗi token trong trường `token` của kết quả trả về.
@@ -127,30 +128,15 @@ Repository thực tế: **[https://github.com/silasWorkSpace/HQTCSDL_UTH](https:
 
 ---
 
-### KỊCH BẢN 3: ĐĂNG NHẬP GITHUB OAUTH 2.0 & LẤY DANH SÁCH REPOSITORIES (Identity Service - Port 8081)
+### KỊCH BẢN 3: ĐĂNG NHẬP GITHUB OAUTH 2.0 & LIÊN KẾT REPOSITORY
 
 Hệ thống hỗ trợ xác thực bằng GitHub OAuth 2.0 Authorization Code Flow kèm quyền truy cập kho mã nguồn (`repo` scope):
 
-1. **Lấy URL ủy quyền GitHub OAuth**:
-   - Mở [http://localhost:8081/swagger-ui.html](http://localhost:8081/swagger-ui.html) $\rightarrow$ `GET /api/v1/auth/github/url`.
-   - Kết quả trả về URL chuyển hướng có dạng:
-     `https://github.com/login/oauth/authorize?client_id=...&redirect_uri=http://localhost:5173/auth/callback&scope=read:user,user:email,repo&state=demo`
-2. **Tiếp nhận mã Callback và cấp phát Token**:
-   - Khi người dùng chấp thuận ủy quyền trên GitHub, GitHub sẽ redirect về callback URL kèm mã `code`.
-   - Gọi `POST /api/v1/auth/github/callback` với JSON payload:
-     ```json
-     {
-       "code": "your_github_auth_code",
-       "tenant": "demo",
-       "redirectUri": "http://localhost:5173/auth/callback"
-     }
-     ```
-   - **Kết quả**:
-     - Hệ thống tự động tìm kiếm user: nếu chưa có, tự động tạo mới (JIT Provisioning) với role mặc định `Developer`.
-     - Trả về `TokenResponse` chứa cả JWT nội bộ của LivingDocs (`accessToken`, `refreshToken`) và `githubAccessToken`.
-3. **Lấy danh sách Repositories từ GitHub API**:
-   - Gọi `GET /api/v1/auth/github/repos` với header `X-GitHub-Token: <github_access_token>`.
-   - Hệ thống kết nối GitHub API `https://api.github.com/user/repos` và trả về toàn bộ danh sách repository thật của user (tên, default branch, public/private, URL).
+1. Cấu hình GitHub OAuth client, redirect URI, Redis và integration-service theo hướng dẫn triển khai.
+2. Mở frontend tại `/login`, nhập mã workspace rồi chọn đăng nhập GitHub. Server tạo state ngẫu nhiên, ngắn hạn và ràng buộc callback với workspace đó.
+3. Khi callback thành công, Identity Service đổi code lấy GitHub token, xác minh tài khoản và gửi token nội bộ tới Integration Service để mã hóa/lưu. Trình duyệt chỉ nhận JWT LivingDocs và ID kết nối.
+4. Tại `/documents`, chọn **Liên kết repository** để tải danh sách repo thật và chọn repository cần thêm.
+5. Workspace đóng đăng ký mặc định. Để cho phép JIT signup, quản trị viên phải bật `github_signup: open` trong `platform.workspace.config`; nếu không, tài khoản phải được provision trước.
 
 ---
 
@@ -162,7 +148,8 @@ Nếu muốn kiểm thử nhanh toàn bộ các luồng chỉ bằng một dòng
 cd backend
 
 # Kiểm thử luồng Quản lý tài liệu & Duyệt 2 cấp & Kafka Notification
-.\test-flow.ps1
+# Chạy profile dev trên workspace E2E riêng; script tạo GitHub PR nhưng không merge.
+.\test-flow.ps1 -Tenant e2e -RepositoryFullName silasWorkSpace/HQTCSDL_UTH -ExpectedBranch feature/backend-integration-service
 
 # Kiểm thử tích hợp GitHub thật & Webhook HMAC SHA-256 & Bóc tách AST bằng AI Engine
 .\test-github-demo.ps1
@@ -191,6 +178,9 @@ Nếu bạn muốn tự tay bật từng service theo cách thủ công:
 # 1. Khởi động SQL Server, Redis, Kafka
 cd backend\infra
 .\db.ps1 up
+# Workspace đã có dữ liệu: cập nhật schema idempotent, không reset database
+.\db.ps1 migrate -Code demo
+# Chỉ dùng khi chủ ý tạo lại database local từ đầu:
 .\db.ps1 rebuild
 .\kafka-topics.ps1
 
@@ -203,3 +193,5 @@ cd backend
 .\mvnw.cmd -pl services/governance-service spring-boot:run "-Dspring-boot.run.profiles=dev"
 .\mvnw.cmd -pl services/notification-service spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
+
+Trên Linux, lệnh tương đương là `./infra/db-compose.sh migrate demo` từ thư mục `backend`.

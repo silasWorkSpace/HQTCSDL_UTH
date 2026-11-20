@@ -1,61 +1,45 @@
 package com.livingdocs.integration.event;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.livingdocs.integration.config.TenantContext;
 import com.livingdocs.integration.dto.EventEnvelope;
 import com.livingdocs.integration.dto.SourceEventDto;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
+/** Persists source messages in the tenant transaction; Kafka delivery is handled by the outbox dispatcher. */
 @Component
 public class SourceEventProducer {
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper mapper;
 
-    private static final Logger log = LoggerFactory.getLogger(SourceEventProducer.class);
-
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final String topic;
-
-    public SourceEventProducer(
-            @Value("#{null}") KafkaTemplate<String, Object> kafkaTemplate,
-            @Value("${livingdocs.kafka.topics.source-events:ld.source-events}") String topic
-    ) {
-        this.kafkaTemplate = kafkaTemplate;
-        this.topic = topic;
+    public SourceEventProducer(JdbcTemplate jdbc, ObjectMapper mapper) {
+        this.jdbc = jdbc;
+        this.mapper = mapper;
     }
 
     public void publishSourceEvent(SourceEventDto eventDto) {
         String tenant = TenantContext.getTenant();
         UUID correlationId = eventDto.correlationId() != null ? eventDto.correlationId() : UUID.randomUUID();
-
-        EventEnvelope<SourceEventDto> envelope = EventEnvelope.of(
-                "SOURCE_EVENT_RECEIVED",
-                tenant,
-                correlationId,
-                eventDto
-        );
-
-        if (kafkaTemplate != null) {
-            try {
-                String partitionKey = eventDto.repositoryId() != null ? eventDto.repositoryId().toString() : tenant;
-                kafkaTemplate.send(topic, partitionKey, envelope)
-                        .whenComplete((result, ex) -> {
-                            if (ex != null) {
-                                log.error("Lỗi khi gửi sự kiện sang Kafka topic {}: {}", topic, ex.getMessage());
-                            } else {
-                                log.info("Đã gửi sự kiện sang Kafka topic {} [partition={}, offset={}]",
-                                        topic, result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
-                            }
-                        });
-            } catch (Exception e) {
-                log.warn("Không thể gửi sự kiện sang Kafka: {}. Bỏ qua trong môi trường dev.", e.getMessage());
-            }
-        } else {
-            log.info("[MOCK KAFKA] Sự kiện đã được đóng gói và sẵn sàng đẩy sang topic {}: eventId={}, type={}",
-                    topic, envelope.eventId(), envelope.type());
+        EventEnvelope<SourceEventDto> envelope = new EventEnvelope<>(
+                eventDto.id(), "SOURCE_EVENT_RECEIVED", tenant, correlationId,
+                eventDto.receivedAt(), eventDto);
+        final String payload;
+        try {
+            payload = mapper.writeValueAsString(envelope);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Could not serialize source event for outbox", ex);
         }
+
+        String schema = TenantContext.getSchemaName();
+        jdbc.update("""
+                IF NOT EXISTS (SELECT 1 FROM [%s].event_outbox WITH (UPDLOCK, HOLDLOCK) WHERE event_id = ?)
+                    INSERT INTO [%s].event_outbox (event_id, analysis_run_id, correlation_id, payload)
+                    VALUES (?, ?, ?, ?)
+                """.formatted(schema, schema),
+                eventDto.id(), eventDto.id(), eventDto.analysisRunId(), correlationId, payload);
     }
 }

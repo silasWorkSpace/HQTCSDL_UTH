@@ -14,5 +14,6 @@ public record SourceEventDto(
         boolean createdByLivingDocs,
         UUID correlationId,
         Instant receivedAt,
-        String payload
+        String payload,
+        UUID analysisRunId
 ) {}

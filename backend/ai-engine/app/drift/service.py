@@ -50,9 +50,11 @@ class SqlDriftRepository:
         self._schema = schema_of(tenant)
 
     def _query(self, sql: str, params: Sequence[Any]) -> list[dict]:
+        is_sqlite = "sqlite" in type(self._conn).__module__.lower()
+        query = sql.replace("%s", "?") if is_sqlite else sql.replace("?", "%s")
         cur = self._conn.cursor()
         try:
-            cur.execute(sql, list(params))
+            cur.execute(query, list(params))
             cols = [c[0] for c in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
         finally:

@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-import java.util.UUID;
+import com.livingdocs.integration.config.TenantContext;
 
 @RestController
 @RequestMapping("/api/v1/webhooks/github")
@@ -31,6 +31,7 @@ public class GitHubWebhookController {
             @RequestHeader(value = "X-Hub-Signature-256", required = false) String signatureHeader,
             @RequestHeader(value = "X-GitHub-Event", defaultValue = "pull_request") String eventTypeHeader,
             @RequestHeader(value = "X-GitHub-Delivery", required = false) String deliveryIdHeader,
+            @RequestHeader(value = "X-Tenant") String tenant,
             @RequestBody String rawPayload
     ) {
         long startTime = System.currentTimeMillis();
@@ -39,18 +40,15 @@ public class GitHubWebhookController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Thiếu header chữ ký X-Hub-Signature-256"));
         }
-
-        String deliveryId = (deliveryIdHeader != null && !deliveryIdHeader.isBlank())
-                ? deliveryIdHeader
-                : UUID.randomUUID().toString();
+        // NFR-REL-05: never invent a delivery key; retries must retain GitHub's stable delivery ID.
+        if (deliveryIdHeader == null || deliveryIdHeader.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Thiếu header X-GitHub-Delivery để bảo đảm idempotency"));
+        }
+        String deliveryId = deliveryIdHeader.trim();
 
         try {
-            WebhookProcessingService.WebhookResult result = webhookService.processWebhook(
-                    rawPayload,
-                    signatureHeader,
-                    eventTypeHeader,
-                    deliveryId
-            );
+            WebhookProcessingService.WebhookResult result = TenantContext.runWith(tenant, () -> webhookService.processWebhook(
+                    rawPayload, signatureHeader, eventTypeHeader, deliveryId));
 
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("Phản hồi webhook thành công sau {} ms (Yêu cầu SLA < 3000ms: {})", elapsed, elapsed < 3000);

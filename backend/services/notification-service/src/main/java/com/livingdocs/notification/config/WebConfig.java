@@ -17,9 +17,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public FilterRegistrationBean<JwtAuthFilter> jwtFilter(
-            @Value("${app.jwt.secret}") String secret) {
+            @Value("${app.jwt.secret}") String secret,
+            @Value("${COOKIE_SECURE:true}") boolean secureCookies) {
         FilterRegistrationBean<JwtAuthFilter> registration =
-                new FilterRegistrationBean<>(new JwtAuthFilter(secret));
+                new FilterRegistrationBean<>(new JwtAuthFilter(secret, secureCookies));
         registration.addUrlPatterns("/api/*");
         registration.setOrder(1);
         return registration;

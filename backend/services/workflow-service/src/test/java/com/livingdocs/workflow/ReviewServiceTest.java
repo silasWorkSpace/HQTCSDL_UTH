@@ -6,7 +6,6 @@ import com.livingdocs.workflow.security.AuthContext;
 import com.livingdocs.workflow.service.AuditService;
 import com.livingdocs.workflow.service.LoggingNotifyPort;
 import com.livingdocs.workflow.service.PublishPort;
-import com.livingdocs.workflow.service.PublishSimulator;
 import com.livingdocs.workflow.service.ReviewService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +37,7 @@ class ReviewServiceTest {
     private final UUID staffId = UUID.randomUUID();
     private final UUID managerId = UUID.randomUUID();
     private final UUID taskId = UUID.randomUUID();
+    private final UUID repositoryId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -48,7 +48,7 @@ class ReviewServiceTest {
 
         WorkflowRepository.DocumentRow doc =
                 new WorkflowRepository.DocumentRow(docId, "API Login", "DRAFT", versionId,
-                        devId, null);
+                        devId, null, repositoryId, "docs/API-Login.md");
         when(repo.findDocument(anyString(), eq(docId))).thenReturn(Optional.of(doc));
         when(repo.findUserIdsWithRole(anyString(), anyString())).thenReturn(List.of());
     }
@@ -59,7 +59,7 @@ class ReviewServiceTest {
     }
 
     private void login(UUID userId, String... roles) {
-        AuthContext.set(new AuthContext.CurrentUser(userId, "acme", List.of(roles)));
+        AuthContext.set(new AuthContext.CurrentUser(userId, "acme", List.of(roles), "test-manager-token"));
     }
 
     @Test
@@ -102,7 +102,7 @@ class ReviewServiceTest {
 
         verify(repo).transitionDocument("acme", docId, "IN_REVIEW_MANAGER", "Staff", staffId);
         verify(repo).insertReviewTask("acme", docId, versionId, "Manager", devId);
-        verify(publishPort, never()).publish(anyString(), any());
+        verifyNoInteractions(publishPort);
     }
 
     @Test
@@ -112,13 +112,23 @@ class ReviewServiceTest {
                 .thenReturn(Optional.of(task("Manager", "Pending")));
         // Manager khác người đã duyệt Staff
         when(repo.listDecisions(anyString(), eq(taskId))).thenReturn(List.of());
+        when(repo.findVersion(anyString(), eq(versionId))).thenReturn(Optional.of(
+                new WorkflowRepository.VersionRow(versionId, 2, "# Approved content", "Developer",
+                        "MANUAL_EDIT", "IN_REVIEW_MANAGER", java.time.OffsetDateTime.now())));
+        when(publishPort.publish(any(), any(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new PublishPort.PublicationResult("commit-sha", 42,
+                        "https://github.com/acme/repo/pull/42", "livingdocs/docs-" + docId));
 
         reviewService.decide("acme", taskId,
                 new ReviewDecisionRequest(ReviewDecisionRequest.DecisionType.APPROVE, null, null),
                 AuthContext.get());
 
         verify(repo).transitionDocument("acme", docId, "APPROVED", "Manager", managerId);
-        verify(publishPort).publish("acme", docId);
+        verify(publishPort).publish(eq(repositoryId), eq(docId), eq("docs/API-Login.md"), eq("API Login"),
+                eq("# Approved content"), eq("test-manager-token"));
+        verify(repo).transitionDocument("acme", docId, "PENDING_MERGE", "system", null);
+        verify(repo).recordDocumentationPullRequest("acme", docId, 42);
+        verify(repo, never()).transitionDocument("acme", docId, "PUBLISHED", "system", null);
     }
 
     @Test

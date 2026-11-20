@@ -5,7 +5,7 @@ from typing import Optional
 import tree_sitter_python as tspython
 from tree_sitter import Language, Node, Parser
 
-from ..models import CodeEntity
+from ..models import CodeEntity, generate_entity_id
 from .base_parser import BaseAstParser
 
 
@@ -126,7 +126,18 @@ class PythonAstParser(BaseAstParser):
 
         signature = f"class {class_name}{bases_str}"
 
+        class_id = generate_entity_id(
+            repository_id=repository_id,
+            commit_hash=commit_hash,
+            file_path=file_path,
+            kind="class",
+            name=class_name,
+            signature=signature,
+            parent_id=parent_id,
+        )
+
         return CodeEntity(
+            id=class_id,
             name=class_name,
             kind="class",
             file_path=file_path,
@@ -170,16 +181,7 @@ class PythonAstParser(BaseAstParser):
         # Parameters
         params_node = actual_func_node.child_by_field_name("parameters")
         param_list_strs = []
-        param_entities: list[CodeEntity] = []
-
-        func_entity = CodeEntity(
-            name=func_name,
-            kind="method",
-            file_path=file_path,
-            commit_hash=commit_hash,
-            repository_id=repository_id,
-            parent_id=parent_id,
-        )
+        raw_params = []
 
         if params_node:
             for child in params_node.children:
@@ -193,23 +195,59 @@ class PythonAstParser(BaseAstParser):
                     p_name = self._extract_param_name(child, p_text)
                     if p_name and p_name != "self" and p_name != "cls":
                         param_list_strs.append(p_text)
-                        param_entity = CodeEntity(
-                            name=p_name,
-                            kind="parameter",
-                            file_path=file_path,
-                            commit_hash=commit_hash,
-                            repository_id=repository_id,
-                            parent_id=func_entity.id,
-                            signature=p_text,
-                        )
-                        param_entities.append(param_entity)
+                        raw_params.append((p_name, p_text))
                     elif p_name in ("self", "cls"):
                         param_list_strs.append(p_name)
 
         params_str = ", ".join(param_list_strs)
         is_async = any(c.type == "async" for c in actual_func_node.children)
         prefix = "async def" if is_async else "def"
-        func_entity.signature = f"{prefix} {func_name}({params_str}) -> {return_type}"
+        func_sig = f"{prefix} {func_name}({params_str}) -> {return_type}"
+
+        func_id = generate_entity_id(
+            repository_id=repository_id,
+            commit_hash=commit_hash,
+            file_path=file_path,
+            kind="method",
+            name=func_name,
+            signature=func_sig,
+            parent_id=parent_id,
+        )
+
+        func_entity = CodeEntity(
+            id=func_id,
+            name=func_name,
+            kind="method",
+            file_path=file_path,
+            commit_hash=commit_hash,
+            repository_id=repository_id,
+            parent_id=parent_id,
+            signature=func_sig,
+        )
+
+        param_entities: list[CodeEntity] = []
+        for idx, (p_name, p_text) in enumerate(raw_params):
+            param_id = generate_entity_id(
+                repository_id=repository_id,
+                commit_hash=commit_hash,
+                file_path=file_path,
+                kind="parameter",
+                name=p_name,
+                signature=p_text,
+                parent_id=func_entity.id,
+                index=idx,
+            )
+            param_entity = CodeEntity(
+                id=param_id,
+                name=p_name,
+                kind="parameter",
+                file_path=file_path,
+                commit_hash=commit_hash,
+                repository_id=repository_id,
+                parent_id=func_entity.id,
+                signature=p_text,
+            )
+            param_entities.append(param_entity)
 
         # Detect FastAPI / Flask endpoint decorator
         endpoint_entity = self._detect_endpoint(decorators, func_entity, file_path, commit_hash, repository_id)
@@ -240,7 +278,18 @@ class PythonAstParser(BaseAstParser):
                 endpoint_name = f"{http_verb} {route_path}"
                 endpoint_sig = f"{http_verb} {route_path} -> {func_entity.signature}"
 
+                endpoint_id = generate_entity_id(
+                    repository_id=repository_id,
+                    commit_hash=commit_hash,
+                    file_path=file_path,
+                    kind="endpoint",
+                    name=endpoint_name,
+                    signature=endpoint_sig,
+                    parent_id=func_entity.id,
+                )
+
                 return CodeEntity(
+                    id=endpoint_id,
                     name=endpoint_name,
                     kind="endpoint",
                     file_path=file_path,

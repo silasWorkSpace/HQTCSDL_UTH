@@ -5,6 +5,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.UUID;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 
 public class SecurityUtils {
 
@@ -12,10 +13,11 @@ public class SecurityUtils {
 
     public static UUID getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user) {
+        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)
+                && auth.getPrincipal() instanceof AuthenticatedUser user) {
             return user.getUserId();
         }
-        return UUID.fromString("00000000-0000-0000-0000-000000000001"); // Default fallback
+        throw new IllegalStateException("Không tìm thấy user đã xác thực trong request hiện tại");
     }
 
     public static String getCurrentUserRole() {
@@ -28,7 +30,7 @@ public class SecurityUtils {
             }
             return role;
         }
-        return "Developer"; // Default role in test context
+        throw new IllegalStateException("Không tìm thấy role đã xác thực trong request hiện tại");
     }
 }
 

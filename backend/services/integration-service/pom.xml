@@ -17,6 +17,10 @@
     <description>LivingDocs GitHub Integration and Webhook Ingestion Service</description>
 
     <dependencies>
+        <dependency>
+            <groupId>com.livingdocs</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
         <!-- Spring Boot Web & Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -84,6 +88,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

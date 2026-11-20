@@ -1,4 +1,4 @@
-import axios from 'axios';
+import apiClient from '../../services/api/apiClient.js';
 import {
   MOCK_DOCUMENTS,
   MOCK_VERSIONS_BY_DOC,
@@ -8,24 +8,8 @@ import {
 } from '../../mocks/documents.js';
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
-const isMockMode = env.VITE_API_MODE === 'mock' || !env.VITE_API_MODE;
-const BASE_URL = env.VITE_API_BASE_URL || '/api/v1/documents';
-
-const http = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Interceptor: inject Bearer token if present
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const isMockMode = Boolean(import.meta.env?.DEV && env.VITE_API_MODE === 'mock');
+const DOCUMENTS_API = '/api/v1/documents';
 
 // In-memory mock store for session modifications
 let activeMockDocs = [...MOCK_DOCUMENTS];
@@ -63,12 +47,79 @@ export const documentsApi = {
     if (isMockMode) {
       return MOCK_REPOSITORIES;
     }
-    try {
-      const res = await axios.get('/api/v1/integration/repositories');
-      return res.data;
-    } catch {
-      return MOCK_REPOSITORIES;
+    const { data } = await apiClient.get('/api/v1/repositories');
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getAvailableGitHubRepositories() {
+    let connectionId = localStorage.getItem('ld_github_connection_id');
+    if (!connectionId) {
+      throw new Error('Chưa có kết nối GitHub. Hãy đăng nhập lại để liên kết repository.');
     }
+    const { data } = await apiClient.get(`/api/v1/integrations/github/connections/${connectionId}/available-repos`);
+    return Array.isArray(data) ? data : [];
+  },
+
+  async connectGitHubAppInstallation(installationId) {
+    const { data } = await apiClient.post('/api/v1/integrations/github/connections/app-installation', {
+      installationId: String(installationId),
+    });
+    localStorage.setItem('ld_github_connection_id', data.id);
+    return data;
+  },
+
+  async getRepositoryContents(repositoryId, path = '') {
+    const { data } = await apiClient.get(`/api/v1/repositories/${repositoryId}/contents`, {
+      params: path ? { path } : {},
+    });
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getRepositoryFile(repositoryId, path) {
+    const { data } = await apiClient.get(`/api/v1/repositories/${repositoryId}/file`, { params: { path } });
+    return data;
+  },
+
+  async connectRepository(connectionId, repo) {
+    const { data } = await apiClient.post('/api/v1/repositories', {
+      connectionId,
+      githubRepoId: repo.id,
+      fullName: repo.full_name,
+      defaultBranch: repo.default_branch,
+    });
+    return data;
+  },
+
+  async getAnalysisRuns(repositoryId) {
+    const { data } = await apiClient.get('/api/v1/analysis-runs', { params: { repositoryId } });
+    return Array.isArray(data) ? data : [];
+  },
+
+  async startAnalysisRun(repositoryId) {
+    const { data } = await apiClient.post(`/api/v1/repositories/${repositoryId}/analysis-runs`);
+    return data;
+  },
+
+  async getAnalysisRun(runId) {
+    const { data } = await apiClient.get(`/api/v1/analysis-runs/${runId}`);
+    return data;
+  },
+
+  async getCodeEntities(repositoryId, commitSha, q = '') {
+    const { data } = await apiClient.get(`/api/v1/repositories/${repositoryId}/code-entities`, {
+      params: { commitSha, ...(q ? { q } : {}) },
+    });
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getGenerationJob(jobId) {
+    const { data } = await apiClient.get(`${DOCUMENTS_API}/generation-jobs/${jobId}`);
+    return data;
+  },
+
+  async retryGenerationJob(jobId) {
+    const { data } = await apiClient.post(`${DOCUMENTS_API}/generation-jobs/${jobId}/retry`);
+    return data;
   },
 
   /**
@@ -97,7 +148,7 @@ export const documentsApi = {
     if (repositoryId) params.repositoryId = repositoryId;
     if (docStatus) params.docStatus = docStatus;
 
-    const res = await http.get('', { params });
+    const res = await apiClient.get(DOCUMENTS_API, { params });
     return normalizeDocumentPageResult(res.data, page, size);
   },
 
@@ -115,7 +166,7 @@ export const documentsApi = {
       return doc;
     }
 
-    const res = await http.get(`/${id}`);
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}`);
     return res.data;
   },
 
@@ -129,7 +180,7 @@ export const documentsApi = {
       return [...versions].sort((a, b) => b.versionNo - a.versionNo);
     }
 
-    const res = await http.get(`/${id}/versions`);
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}/versions`);
     const list = Array.isArray(res.data) ? res.data : [];
     return [...list].sort((a, b) => b.versionNo - a.versionNo);
   },
@@ -149,7 +200,7 @@ export const documentsApi = {
       return match;
     }
 
-    const res = await http.get(`/${id}/versions/${versionNo}`);
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}/versions/${versionNo}`);
     return res.data;
   },
 
@@ -204,7 +255,7 @@ export const documentsApi = {
       return newVersion;
     }
 
-    const res = await http.put(`/${id}/draft`, { content });
+    const res = await apiClient.put(`${DOCUMENTS_API}/${id}/draft`, { content, baseVersionNo });
     return res.data;
   },
 
@@ -234,7 +285,7 @@ export const documentsApi = {
       };
     }
 
-    const res = await http.get(`/${id}/diff`, { params: { from, to } });
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}/diff`, { params: { from, to } });
     return res.data;
   },
 
@@ -287,7 +338,7 @@ export const documentsApi = {
       };
     }
 
-    const res = await http.post(`/${id}/rollback`, { targetVersionNo, reason });
+    const res = await apiClient.post(`${DOCUMENTS_API}/${id}/rollback`, { targetVersionNo, reason });
     return res.data;
   },
 
@@ -305,7 +356,7 @@ export const documentsApi = {
       );
     }
 
-    const res = await http.get(`/${id}/integrity`);
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}/integrity`);
     return res.data;
   },
 
@@ -317,21 +368,21 @@ export const documentsApi = {
       return MOCK_LINKS_BY_DOC[id] || [];
     }
 
-    const res = await http.get(`/${id}/links`);
+    const res = await apiClient.get(`${DOCUMENTS_API}/${id}/links`);
     return res.data;
   },
 
   /**
    * Submits asynchronous AI document generation request (GEN-02, GEN-03).
    */
-  async generateDocument({ scopeType, scopeReference, repositoryId, templateId, commitSha, title, targetPath }) {
+  async generateDocument({ scopeType = 'REPOSITORY', scopeReference = 'selected entities', repositoryId, templateId, commitSha, codeEntityIds, title, pathInRepo }) {
     if (isMockMode) {
       const newDocId = `d-ai-${Date.now()}`;
       const newDoc = {
         id: newDocId,
         repositoryId,
         title: title || 'Tài liệu sinh tự động',
-        pathInRepo: targetPath || scopeReference || 'docs/generated.md',
+        pathInRepo: pathInRepo || 'docs/generated.md',
         docType: 'README',
         templateId,
         collectionId: null,
@@ -378,14 +429,28 @@ export const documentsApi = {
       };
     }
 
-    const res = await http.post('/generate', {
+    const res = await apiClient.post(`${DOCUMENTS_API}/generate`, {
       scopeType,
       scopeReference,
       repositoryId,
       templateId,
       commitSha,
+      codeEntityIds,
+      title,
+      pathInRepo,
     });
     return res.data;
+  },
+
+  async createDocument({ repositoryId, title, pathInRepo, content, docType = 'README' }) {
+    const { data } = await apiClient.post(DOCUMENTS_API, {
+      repositoryId,
+      title,
+      pathInRepo,
+      content,
+      docType,
+    });
+    return data;
   },
 
   /**
@@ -406,17 +471,7 @@ export const documentsApi = {
       };
     }
 
-    // Direct endpoint when available on workflow service
-    try {
-      const res = await axios.post(`/api/v1/workflow/documents/${id}/submit`);
-      return res.data;
-    } catch {
-      // Fallback
-      return {
-        success: true,
-        docStatus: 'IN_REVIEW_STAFF',
-        message: 'Đã nộp duyệt thành công.',
-      };
-    }
+    const { data } = await apiClient.post(`/api/v1/documents/${id}/submit`);
+    return data;
   },
 };

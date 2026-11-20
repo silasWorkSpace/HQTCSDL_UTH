@@ -1,146 +1,78 @@
-import { Alert, Button, Descriptions, Drawer, Input, Progress, Skeleton, Space, Tag, Typography, message } from 'antd'
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import DiffViewer from '../../components/DiffViewer'
-import EvidencePanel from '../../components/EvidencePanel'
-import MarkdownView from '../../components/MarkdownView'
-import SeverityBadge from '../../components/SeverityBadge'
-import { formatDateTime, slug } from '../shared/format'
-import { problemMessage } from '../shared/problemMessage'
-import DismissModal from './DismissModal'
-import {
-  useAcceptSuggestion,
-  useDismissSuggestion,
-  useDriftAlerts,
-  useEditSuggestion,
-  usePublishedContent,
-} from './hooks'
-import { confidencePercent, isPending } from './model'
+import { acceptSuggestion, dismissSuggestion, editSuggestion, fetchPublishedContent, listDriftAlerts } from '../../services/workflowApi'
+import { normalizeDriftAlert } from './model'
 
-function SuggestionDetail({ suggestion, onDone }) {
-  const { t, i18n } = useTranslation()
-  const alerts = useDriftAlerts(suggestion.documentId)
-  const published = usePublishedContent(suggestion.documentId)
-  const accept = useAcceptSuggestion()
-  const edit = useEditSuggestion()
-  const dismiss = useDismissSuggestion()
+export default function SuggestionDrawer({ suggestion, onClose, onDone = onClose }) {
+  const [alerts, setAlerts] = useState([])
+  const [publishedContent, setPublishedContent] = useState(null)
+  const [content, setContent] = useState('')
+  const [reason, setReason] = useState('')
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(suggestion.content)
-  const [dismissOpen, setDismissOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const pending = isPending(suggestion)
-  const busy = accept.isPending || edit.isPending || dismiss.isPending
-  const linkedAlert = (alerts.data ?? []).find((a) => a.id === suggestion.driftAlertId) ?? null
-  const severity = linkedAlert?.severity ?? suggestion.topSeverity
-  const percent = confidencePercent(suggestion.confidence)
-  const shownContent = editing ? draft : suggestion.content
-
-  const run = (mutation, variables, okKey) =>
-    mutation.mutate(variables, {
-      onSuccess: () => {
-        message.success(t(okKey))
-        setDismissOpen(false)
-        onDone()
-      },
-      onError: (error) => message.error(problemMessage(error, t)),
+  useEffect(() => {
+    if (!suggestion) return
+    let active = true
+    setContent(suggestion.content || '')
+    setReason('')
+    setEditing(false)
+    setError('')
+    Promise.all([
+      listDriftAlerts(suggestion.documentId).catch(() => []),
+      fetchPublishedContent(suggestion.documentId).catch(() => null),
+    ]).then(([items, published]) => {
+      if (!active) return
+      setAlerts((items || []).map(normalizeDriftAlert))
+      setPublishedContent(published)
     })
+    return () => { active = false }
+  }, [suggestion])
 
+  if (!suggestion) return null
+  const alert = alerts.find((item) => item.id === suggestion.driftAlertId)
+  const run = async (action) => {
+    setLoading(true)
+    setError('')
+    try {
+      if (action === 'accept') await acceptSuggestion(suggestion.id)
+      if (action === 'edit') await editSuggestion(suggestion.id, content)
+      if (action === 'dismiss') {
+        if (!reason.trim()) throw new Error('Cần nhập lý do dismiss.')
+        await dismissSuggestion(suggestion.id, reason.trim())
+      }
+      onDone?.()
+    } catch (e) {
+      setError(e?.detail || e?.message || 'Không xử lý được gợi ý.')
+    } finally { setLoading(false) }
+  }
+
+  const pending = suggestion.status === 'Pending Developer Action'
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {pending ? (
-        <Space wrap>
-          <Button type="primary" loading={accept.isPending} disabled={busy || editing} onClick={() => run(accept, suggestion.id, 'suggestions.drawer.acceptedOk')}>
-            {t('suggestions.drawer.accept')}
-          </Button>
-          {editing ? (
-            <>
-              <Button type="primary" loading={edit.isPending} disabled={busy || !draft.trim()} onClick={() => run(edit, { id: suggestion.id, content: draft }, 'suggestions.drawer.editedOk')}>
-                {t('suggestions.drawer.sendEdit')}
-              </Button>
-              <Button disabled={busy} onClick={() => { setEditing(false); setDraft(suggestion.content) }}>
-                {t('suggestions.drawer.cancelEdit')}
-              </Button>
-            </>
-          ) : (
-            <Button disabled={busy} onClick={() => setEditing(true)}>{t('suggestions.drawer.edit')}</Button>
-          )}
-          <Button danger disabled={busy || editing} onClick={() => setDismissOpen(true)}>{t('suggestions.drawer.dismiss')}</Button>
-        </Space>
-      ) : (
-        <Alert
-          type="info"
-          showIcon
-          message={t('suggestions.drawer.handled')}
-          description={suggestion.dismissReason ? t('suggestions.drawer.dismissedWith', { reason: suggestion.dismissReason }) : null}
-        />
-      )}
-
-      <Descriptions column={1} size="small" bordered>
-        <Descriptions.Item label={t('suggestions.drawer.driftType')}>
-          {linkedAlert?.driftType ? (
-            <Tag>{t(`suggestions.history.types.${slug(linkedAlert.driftType)}`, { defaultValue: linkedAlert.driftType })}</Tag>
-          ) : (
-            alerts.isLoading ? <Skeleton.Input active size="small" /> : '—'
-          )}
-        </Descriptions.Item>
-        <Descriptions.Item label={t('suggestions.drawer.severity')}>
-          <SeverityBadge severity={severity} />
-        </Descriptions.Item>
-        <Descriptions.Item label={t('suggestions.drawer.confidence')}>
-          {percent == null ? '—' : <Progress percent={percent} size="small" style={{ maxWidth: 220 }} />}
-        </Descriptions.Item>
-        <Descriptions.Item label={t('suggestions.columns.createdAt')}>
-          {formatDateTime(suggestion.createdAt, i18n.language)}
-        </Descriptions.Item>
-        {suggestion.evidence.commit && (
-          <Descriptions.Item label={t('evidence.commit')}>{String(suggestion.evidence.commit).slice(0, 10)}</Descriptions.Item>
-        )}
-      </Descriptions>
-
-      <section>
-        <Typography.Title level={5}>{editing ? t('suggestions.drawer.editing') : t('suggestions.drawer.suggested')}</Typography.Title>
-        {editing ? (
-          <Input.TextArea rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        ) : (
-          <MarkdownView content={suggestion.content} />
-        )}
-      </section>
-
-      <section>
-        <Typography.Title level={5}>{t('suggestions.drawer.diffTitle')}</Typography.Title>
-        {published.isLoading ? (
-          <Skeleton active paragraph={{ rows: 3 }} />
-        ) : published.data ? (
-          <DiffViewer oldText={published.data} newText={shownContent} />
-        ) : (
-          <Alert type="info" showIcon message={t('suggestions.drawer.noPublished')} />
-        )}
-      </section>
-
-      <section>
-        <Typography.Title level={5}>{t('suggestions.drawer.evidence')}</Typography.Title>
-        <EvidencePanel evidence={suggestion.evidence} />
-      </section>
-
-      <Link to={`/drift-history?documentId=${suggestion.documentId}`}>{t('suggestions.drawer.history')}</Link>
-
-      <DismissModal
-        open={dismissOpen}
-        loading={dismiss.isPending}
-        onCancel={() => setDismissOpen(false)}
-        onConfirm={(reason) => run(dismiss, { id: suggestion.id, reason }, 'suggestions.drawer.dismissedOk')}
-      />
-    </Space>
-  )
-}
-
-/** Drawer chi tiết gợi ý. Mở gợi ý là thao tác 1, Accept là thao tác 2 (NFR-USAB-02). */
-export default function SuggestionDrawer({ suggestion, onClose }) {
-  const { t } = useTranslation()
-  return (
-    <Drawer open={Boolean(suggestion)} onClose={onClose} width={720} title={suggestion?.documentTitle || t('suggestions.drawer.title')}>
-      {suggestion && <SuggestionDetail key={suggestion.id} suggestion={suggestion} onDone={onClose} />}
-    </Drawer>
+    <div role="presentation" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: '#0f172a66', display: 'flex', justifyContent: 'flex-end' }}>
+      <aside role="dialog" aria-modal="true" aria-label={`Gợi ý ${suggestion.documentTitle}`} onClick={(event) => event.stopPropagation()}
+        style={{ background: 'white', width: 'min(720px, 100vw)', height: '100%', overflow: 'auto', padding: 24, boxShadow: '-8px 0 24px #0f172a22' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <div><h2 style={{ marginTop: 0 }}>{suggestion.documentTitle || 'Gợi ý drift'}</h2><span>{suggestion.status} · {alert?.driftType || suggestion.origin} · {alert?.severity || suggestion.topSeverity || '—'}</span></div>
+          <button type="button" className="ld-btn ld-btn-ghost" onClick={onClose}>Đóng</button>
+        </header>
+        {pending && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '18px 0' }}>
+          {!editing && <button className="ld-btn ld-btn-primary" disabled={loading} onClick={() => run('accept')}>Chấp nhận và gửi duyệt</button>}
+          {!editing && <button className="ld-btn ld-btn-secondary" disabled={loading} onClick={() => setEditing(true)}>Sửa đề xuất</button>}
+          {editing && <><button className="ld-btn ld-btn-primary" disabled={loading || !content.trim()} onClick={() => run('edit')}>Lưu và gửi duyệt</button><button className="ld-btn ld-btn-secondary" onClick={() => { setEditing(false); setContent(suggestion.content) }}>Hủy sửa</button></>}
+        </div>}
+        {pending && <section style={{ marginBottom: 18 }}><label className="ld-label">Lý do bỏ qua gợi ý<textarea className="ld-input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do rồi bấm Bỏ qua" /></label><button className="ld-btn ld-btn-secondary" disabled={loading || !reason.trim()} onClick={() => run('dismiss')}>Bỏ qua gợi ý</button></section>}
+        {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+        <section><h3>Nội dung đề xuất</h3>{editing ? <textarea className="ld-input" rows={14} value={content} onChange={(e) => setContent(e.target.value)} /> : <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{suggestion.content}</pre>}</section>
+        <section><h3>Bằng chứng nguồn code</h3><dl>
+          <dt>Commit</dt><dd>{suggestion.evidence.commit || '—'}</dd>
+          <dt>File</dt><dd>{suggestion.evidence.file || '—'}</dd>
+          <dt>Drift</dt><dd>{alert?.driftType || '—'} / {alert?.handlingStatus || '—'}</dd>
+        </dl><pre style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: 12, overflowX: 'auto' }}>{JSON.stringify({ entities: suggestion.evidence.entities, diff: suggestion.evidence.diff }, null, 2)}</pre></section>
+        <section><h3>So sánh nội dung</h3><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div><strong>Bản đã publish</strong><pre style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}>{publishedContent || 'Chưa có bản published.'}</pre></div><div><strong>Đề xuất</strong><pre style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}>{editing ? content : suggestion.content}</pre></div></div></section>
+        <Link to={`/drift-history?documentId=${suggestion.documentId}`} onClick={onClose}>Mở lịch sử drift của tài liệu</Link>
+      </aside>
+    </div>
   )
 }

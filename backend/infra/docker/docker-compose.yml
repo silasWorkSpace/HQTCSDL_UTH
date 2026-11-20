@@ -16,7 +16,7 @@ services:
       SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD}
       MSSQL_AGENT_ENABLED: "true"
     ports:
-      - "1433:1433"
+      - "127.0.0.1:1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
       - ../mssql:/scripts:ro
@@ -31,7 +31,7 @@ services:
     image: redis:7-alpine
     container_name: livingdocs-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -44,7 +44,7 @@ services:
     image: apache/kafka:4.0.0
     container_name: livingdocs-kafka
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -74,22 +74,33 @@ services:
       dockerfile: Dockerfile
     container_name: livingdocs-identity
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       DB_HOST: mssql
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       REDIS_HOST: redis
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      INTEGRATION_SERVICE_URL: http://integration-service:8082
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: logstash
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-your-github-oauth-client-id}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-your-github-oauth-client-secret}
-      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:5173/auth/callback}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID is required}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET is required}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:?GITHUB_REDIRECT_URI is required}
       GITHUB_SCOPE: ${GITHUB_SCOPE:-read:user,user:email,repo}
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      integration-service:
         condition: service_healthy
 
   integration-service:
@@ -100,13 +111,26 @@ services:
     container_name: livingdocs-integration
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
-      SPRING_DATASOURCE_USERNAME: sa
-      SPRING_DATASOURCE_PASSWORD: ${MSSQL_SA_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:?DB_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY_PEM: ${GITHUB_APP_PRIVATE_KEY_PEM:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8082/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
@@ -123,12 +147,21 @@ services:
     container_name: livingdocs-document
     environment:
       DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
-      DB_USER: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       KAFKA_SERVERS: kafka:19092
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8083/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
@@ -144,12 +177,22 @@ services:
     environment:
       DB_HOST: mssql
       DB_PORT: 1433
-      DB_USER: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       KAFKA_BOOTSTRAP: kafka:19092
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      INTEGRATION_SERVICE_URL: http://integration-service:8082
     ports:
-      - "8084:8084"
+      - "127.0.0.1:8084:8084"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8084/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
@@ -164,11 +207,20 @@ services:
     container_name: livingdocs-governance
     environment:
       DB_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
-      DB_USER: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8085/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
@@ -181,12 +233,21 @@ services:
     container_name: livingdocs-notification
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlserver://mssql:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false
-      SPRING_DATASOURCE_USERNAME: sa
-      SPRING_DATASOURCE_PASSWORD: ${MSSQL_SA_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:?DB_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     ports:
-      - "8086:8086"
+      - "127.0.0.1:8086:8086"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8086/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     depends_on:
       mssql:
         condition: service_healthy
@@ -201,11 +262,64 @@ services:
     container_name: livingdocs-ai-engine
     environment:
       PORT: 8090
-      LLM_PROVIDER: mock
-      LLM_MODEL: mock-model-v1
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_ENABLED: "true"
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      INTEGRATION_INTERNAL_URL: http://integration-service:8082
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
+      AI_ENGINE_SQLSERVER_HOST: mssql
+      AI_ENGINE_SQLSERVER_PORT: 1433
+      AI_ENGINE_SQLSERVER_DATABASE: livingdocs
+      AI_ENGINE_SQLSERVER_USER: ${DB_USER:?DB_USER is required}
+      AI_ENGINE_SQLSERVER_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health/readiness', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
+    depends_on:
+      mssql:
+        condition: service_healthy
+      integration-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  caddy:
+    profiles: ["full"]
+    image: caddy:2-alpine
+    container_name: livingdocs-caddy
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      integration-service:
+        condition: service_healthy
+      document-service:
+        condition: service_healthy
+      workflow-service:
+        condition: service_healthy
+      governance-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
 
 volumes:
   mssql_data:
   kafka_data:
+  caddy_data:
+  caddy_config:

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Thử import thư viện Kafka (kafka-python)
 try:
     from kafka import KafkaConsumer, KafkaProducer
+    from kafka.structs import OffsetAndMetadata, TopicPartition
     KAFKA_LIB_AVAILABLE = True
 except ImportError:
     KAFKA_LIB_AVAILABLE = False
@@ -81,7 +82,7 @@ class KafkaEventBus:
                     bootstrap_servers=self.bootstrap_servers,
                     group_id=group_id,
                     auto_offset_reset="earliest",
-                    enable_auto_commit=True,
+                    enable_auto_commit=False,
                     value_deserializer=lambda m: json.loads(m.decode("utf-8")),
                     consumer_timeout_ms=2000,
                 )
@@ -89,9 +90,20 @@ class KafkaEventBus:
                     try:
                         records = consumer.poll(timeout_ms=1000)
                         for tp, msgs in records.items():
+                            partition_failed = False
                             for msg in msgs:
+                                if partition_failed:
+                                    continue
                                 logger.info("[KAFKA RECV] Topic: %s | Offset: %d", topic, msg.offset)
-                                handler(msg.value)
+                                try:
+                                    handler(msg.value)
+                                    consumer.commit({TopicPartition(msg.topic, msg.partition):
+                                                     OffsetAndMetadata(msg.offset + 1, None)})
+                                except Exception:
+                                    # Keep this offset uncommitted so the durable job/event can be retried.
+                                    logger.exception("Handler failed; leaving Kafka offset uncommitted topic=%s offset=%s",
+                                                     topic, msg.offset)
+                                    partition_failed = True
                     except Exception as e:
                         if self.running:
                             logger.error("Lỗi khi poll Kafka topic %s: %s", topic, e)

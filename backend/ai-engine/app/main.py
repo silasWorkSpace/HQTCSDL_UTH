@@ -4,12 +4,15 @@ LivingDocs AI Engine - FastAPI Application & Event Worker
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, Field
 
+from app.llm.base import LlmProviderError
 from app.llm.factory import get_llm_provider
+from app.provider_errors import provider_http_exception
 from app.llm.schemas import DocDraft
 from app.consumers.kafka_bus import get_event_bus
 from app.consumers.source_event_consumer import SourceEventConsumer
@@ -90,11 +93,66 @@ def health():
     }
 
 
+@app.get("/health/readiness")
+def readiness(response: Response):
+    """Report whether this instance has the mandatory runtime configuration.
+
+    This deliberately checks configuration and the Kafka producer created at
+    startup, rather than making an LLM request or a write to SQL Server.  It is
+    safe for Compose and the E2E harness to poll, while still refusing traffic
+    when a required dependency was not configured.
+    """
+    issues: Dict[str, str] = {}
+    bus = get_event_bus()
+    provider_name = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+
+    if provider_name not in {"gemini", "mock"}:
+        issues["provider"] = "LLM_PROVIDER must be gemini or mock"
+    elif provider_name == "gemini" and not os.getenv("GEMINI_API_KEY", "").strip():
+        issues["provider"] = "GEMINI_API_KEY is required for Gemini"
+    else:
+        try:
+            # Construction validates the selected provider configuration without
+            # invoking a model or allowing a silent Gemini-to-mock fallback.
+            get_llm_provider(provider_name)
+        except (ValueError, LlmProviderError) as exc:
+            issues["provider"] = str(exc)
+
+    for setting in (
+        "AI_ENGINE_SQLSERVER_HOST",
+        "AI_ENGINE_SQLSERVER_DATABASE",
+        "AI_ENGINE_SQLSERVER_USER",
+        "AI_ENGINE_SQLSERVER_PASSWORD",
+        "INTERNAL_SERVICE_TOKEN",
+    ):
+        if not os.getenv(setting, "").strip():
+            issues[setting.lower()] = "is required"
+
+    if bus.enabled and bus.producer is None:
+        issues["kafka"] = "Kafka producer is not connected"
+
+    ready = not issues
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {
+        "status": "UP" if ready else "DOWN",
+        "service": "ai-engine",
+        "ready": ready,
+        "provider": provider_name,
+        "kafkaEnabled": bus.enabled,
+        "kafkaConnected": bus.producer is not None,
+        "issues": issues,
+    }
+
+
 @app.post("/api/v1/llm/generate", response_model=DocDraft)
 def generate_document(req: GenerateRequest):
     """Sinh bản thảo tài liệu qua LLM Provider."""
     provider = get_llm_provider()
-    return provider.generate_doc(req.entities, req.template, req.options)
+    try:
+        return provider.generate_doc(req.entities, req.template, req.options)
+    except LlmProviderError as exc:
+        raise provider_http_exception(exc) from None
 
 
 @app.post("/api/v1/jobs/source-event")

@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(GitHubWebhookController.class)
+@WebMvcTest(value = GitHubWebhookController.class, properties = "JWT_SECRET=test-only-signing-key-with-at-least-32-characters")
 class GitHubWebhookControllerTest {
 
     @Autowired
@@ -30,6 +30,7 @@ class GitHubWebhookControllerTest {
     @DisplayName("NFR-SEC-06: Thiếu header X-Hub-Signature-256 phải trả về HTTP 401 Unauthorized")
     void testMissingSignatureReturns401() throws Exception {
         mockMvc.perform(post("/api/v1/webhooks/github")
+                        .header("X-Tenant", "test_tenant")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"action\":\"opened\"}"))
                 .andExpect(status().isUnauthorized())
@@ -46,6 +47,7 @@ class GitHubWebhookControllerTest {
                 ));
 
         mockMvc.perform(post("/api/v1/webhooks/github")
+                        .header("X-Tenant", "test_tenant")
                         .header("X-Hub-Signature-256", "sha256=abcdef1234567890")
                         .header("X-GitHub-Event", "pull_request")
                         .header("X-GitHub-Delivery", "delivery-guid-123")

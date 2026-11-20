@@ -23,6 +23,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 
 /**
  * Cau hinh bao mat dung chung cho moi service: xac thuc JWT (HS256), kiem tra vai tro phia server (@PreAuthorize),
@@ -62,18 +64,29 @@ public class LdSecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, LdSecurityProperties props,
-                                                   JwtAuthenticationConverter converter) throws Exception {
+                                                   JwtAuthenticationConverter converter,
+                                                   @Value("${COOKIE_SECURE:true}") boolean secureCookies,
+                                                   Environment environment) throws Exception {
         List<String> open = new ArrayList<>(List.of(
                 "/actuator/health/**", "/actuator/info",
                 "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"));
         open.addAll(props.publicPaths());
+        // DevTokenController itself only exists in the dev profile.  Its route must
+        // be reachable without a JWT there, but must never become public in another
+        // profile through a shared security configuration.
+        if (java.util.Arrays.asList(environment.getActiveProfiles()).contains("dev")) {
+            open.add("/api/v1/auth/dev-token");
+        }
 
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(open.toArray(String[]::new)).permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(converter)))
+                .oauth2ResourceServer(o -> o
+                        .bearerTokenResolver(new CookieBearerTokenResolver())
+                        .jwt(j -> j.jwtAuthenticationConverter(converter)))
+                .addFilterBefore(new CsrfProtectionFilter(secureCookies), BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(new TenantFilter(), BearerTokenAuthenticationFilter.class);
         return http.build();
     }

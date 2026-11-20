@@ -20,6 +20,18 @@ export default function DocumentListPage({ onNavigate, userRole = 'Developer' })
 
   const [documents, setDocuments] = useState([]);
   const [repositories, setRepositories] = useState([]);
+  const [availableGithubRepos, setAvailableGithubRepos] = useState([]);
+  const [selectedGithubRepo, setSelectedGithubRepo] = useState('');
+  const [repositoryMessage, setRepositoryMessage] = useState('');
+  const [repositoryBusy, setRepositoryBusy] = useState(false);
+  const [browserRepositoryId, setBrowserRepositoryId] = useState('');
+  const [repositoryPath, setRepositoryPath] = useState('');
+  const [repositoryEntries, setRepositoryEntries] = useState([]);
+  const [repositoryFile, setRepositoryFile] = useState(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState('');
+  const [analysisRun, setAnalysisRun] = useState(null);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const size = 20;
@@ -48,21 +60,166 @@ export default function DocumentListPage({ onNavigate, userRole = 'Developer' })
       setTotal(res.total || 0);
     } catch (err) {
       setError(
-        err?.response?.data?.detail || err?.response?.data?.title || err.message || 'Lỗi khi tải danh sách tài liệu'
+        err?.detail || err?.response?.data?.detail || err?.response?.data?.title || err.message || 'Lỗi khi tải danh sách tài liệu'
       );
     } finally {
       setLoading(false);
     }
   }, [selectedRepo, selectedStatus, page, size]);
 
+  const loadGithubRepos = async () => {
+    setRepositoryBusy(true);
+    setRepositoryMessage('');
+    try {
+      const list = await documentsApi.getAvailableGitHubRepositories();
+      setAvailableGithubRepos(list);
+      setSelectedGithubRepo((current) => current || String(list[0]?.id || ''));
+      if (!list.length) setRepositoryMessage('Tài khoản GitHub không có repository nào được cấp quyền.');
+    } catch (err) {
+      setRepositoryMessage(err?.detail || err?.message || 'Không tải được repository từ GitHub.');
+    } finally {
+      setRepositoryBusy(false);
+    }
+  };
+
+  const linkGithubRepo = async () => {
+    const repo = availableGithubRepos.find((item) => String(item.id) === selectedGithubRepo);
+    if (!repo) return;
+    setRepositoryBusy(true);
+    setRepositoryMessage('');
+    try {
+      const linked = await documentsApi.connectRepository(localStorage.getItem('ld_github_connection_id'), repo);
+      const list = await documentsApi.getRepositories();
+      setRepositories(list);
+      const linkedRepository = list.find((item) => String(item.id) === String(linked.id))
+        || list.find((item) => String(item.githubRepoId) === String(repo.id));
+      setBrowserRepositoryId((current) => current || String(linkedRepository?.id || list[0]?.id || ''));
+      const runs = linkedRepository ? await documentsApi.getAnalysisRuns(linkedRepository.id) : [];
+      setRepositoryMessage(`Đã liên kết ${repo.full_name}; phân tích ban đầu: ${runs[0]?.status || 'queued'}.`);
+    } catch (err) {
+      setRepositoryMessage(err?.detail || err?.message || 'Không liên kết được repository.');
+    } finally {
+      setRepositoryBusy(false);
+    }
+  };
+
+  const browseRepository = async (repositoryId, path = '') => {
+    if (!repositoryId) return;
+    setBrowserRepositoryId(repositoryId);
+    setRepositoryPath(path);
+    setRepositoryFile(null);
+    setContentLoading(true);
+    setContentError('');
+    try {
+      const entries = await documentsApi.getRepositoryContents(repositoryId, path);
+      setRepositoryEntries(entries);
+    } catch (err) {
+      setRepositoryEntries([]);
+      setContentError(err?.detail || err?.message || 'Không đọc được nội dung repository.');
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const openRepositoryEntry = async (entry) => {
+    if (entry.type === 'dir') {
+      await browseRepository(browserRepositoryId, entry.path);
+      return;
+    }
+    setContentLoading(true);
+    setContentError('');
+    setRepositoryFile(null);
+    try {
+      setRepositoryFile(await documentsApi.getRepositoryFile(browserRepositoryId, entry.path));
+    } catch (err) {
+      setContentError(err?.detail || err?.message || 'Không đọc được file này.');
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const startRepositoryAnalysis = async () => {
+    if (!browserRepositoryId || analysisBusy) return;
+    setAnalysisBusy(true);
+    setAnalysisRun(null);
+    setRepositoryMessage('Đang xếp hàng phân tích repository…');
+    try {
+      const queued = await documentsApi.startAnalysisRun(browserRepositoryId);
+      setAnalysisRun({ id: queued.runId, status: queued.status || 'queued' });
+    } catch (err) {
+      setAnalysisBusy(false);
+      setRepositoryMessage(err?.detail || err?.message || 'Không thể bắt đầu phân tích repository.');
+    }
+  };
+
+  const analysisRunId = analysisRun?.id;
+  useEffect(() => {
+    if (!analysisRunId) return undefined;
+    let active = true;
+    let timer;
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const current = await documentsApi.getAnalysisRun(analysisRunId);
+        if (!active) return;
+        setAnalysisRun(current);
+        const status = String(current.status || '').toLowerCase();
+        if (status === 'completed') {
+          setAnalysisBusy(false);
+          setRepositoryMessage(`Phân tích hoàn tất: ${current.filesIndexed} file, ${current.entitiesIndexed} code entity.`);
+          return;
+        }
+        if (status === 'failed') {
+          setAnalysisBusy(false);
+          setRepositoryMessage(current.errorMessage || 'Phân tích repository thất bại.');
+          return;
+        }
+        attempts += 1;
+        if (attempts >= 60) {
+          setAnalysisBusy(false);
+          setRepositoryMessage('Chưa nhận được kết quả phân tích sau 2 phút. Hãy kiểm tra lại trạng thái run.');
+          return;
+        }
+        timer = window.setTimeout(poll, 2000);
+      } catch (err) {
+        if (!active) return;
+        setAnalysisBusy(false);
+        setRepositoryMessage(err?.detail || err?.message || 'Không đọc được trạng thái analysis run.');
+      }
+    };
+    poll();
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [analysisRunId]);
+
   // Load repositories once
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const installationId = params.get('installation_id');
+    if (!installationId) return;
+    let active = true;
+    documentsApi.connectGitHubAppInstallation(installationId)
+      .then(async () => {
+        window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`);
+        if (!active) return;
+        setRepositoryMessage('GitHub App đã được kết nối; đang tải repository được cấp quyền.');
+        await loadGithubRepos();
+      })
+      .catch((err) => {
+        if (active) setRepositoryMessage(err?.detail || err?.message || 'Không kết nối được GitHub App installation.');
+      });
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     const loadRepos = async () => {
       try {
         const repoList = await documentsApi.getRepositories();
         setRepositories(repoList || []);
-      } catch {
-        // Fallback or ignore
+      } catch (err) {
+        setRepositoryMessage(err?.detail || err?.message || 'Không tải được repository đã liên kết.');
       }
     };
     loadRepos();
@@ -100,11 +257,123 @@ export default function DocumentListPage({ onNavigate, userRole = 'Developer' })
             className="ld-btn ld-btn-primary"
             style={{ padding: '9px 16px', fontSize: '14px' }}
           >
-            <Sparkles size={16} />
-            {t('documents.btnGenerate')}
+            <FileText size={16} />
+            Tạo tài liệu
           </button>
         )}
       </div>
+
+      <section className="ld-card" style={{ marginBottom: 20, padding: '16px 18px' }}>
+        <h2 style={{ margin: '0 0 8px', fontSize: 15 }}>GitHub repositories</h2>
+        <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: 13 }}>Tải repository được cấp quyền trên GitHub, sau đó liên kết vào workspace.</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button type="button" className="ld-btn ld-btn-secondary" onClick={() => {
+            const slug = import.meta.env.VITE_GITHUB_APP_SLUG;
+            if (!slug) {
+              setRepositoryMessage('Thiếu VITE_GITHUB_APP_SLUG trong frontend/.env để mở trang cài GitHub App.');
+              return;
+            }
+            window.location.assign(`https://github.com/apps/${encodeURIComponent(slug)}/installations/new`);
+          }} disabled={repositoryBusy}>
+            Cài đặt / cấp quyền GitHub App
+          </button>
+          <button type="button" className="ld-btn ld-btn-secondary" onClick={loadGithubRepos} disabled={repositoryBusy}>
+            {repositoryBusy ? 'Đang tải…' : 'Tải repository GitHub'}
+          </button>
+          <select className="ld-select" value={selectedGithubRepo} onChange={(e) => setSelectedGithubRepo(e.target.value)} disabled={!availableGithubRepos.length}>
+            <option value="">Chọn repository</option>
+            {availableGithubRepos.map((repo) => <option key={repo.id} value={repo.id}>{repo.full_name}</option>)}
+          </select>
+          <button type="button" className="ld-btn ld-btn-primary" onClick={linkGithubRepo} disabled={repositoryBusy || !selectedGithubRepo}>
+            Liên kết repository
+          </button>
+        </div>
+        {repositoryMessage && <p role="status" style={{ margin: '10px 0 0', fontSize: 13, color: repositoryMessage.startsWith('Đã liên kết') ? '#15803d' : '#b91c1c' }}>{repositoryMessage}</p>}
+      </section>
+
+      <section className="ld-card" style={{ marginBottom: 20, padding: '16px 18px' }}>
+        <h2 style={{ margin: '0 0 8px', fontSize: 15 }}>Nội dung repository</h2>
+        <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: 13 }}>
+          Duyệt thư mục và xem trước file văn bản trên nhánh mặc định. Token GitHub được giữ ở backend.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select
+            className="ld-select"
+            value={browserRepositoryId}
+            onChange={(event) => {
+              setBrowserRepositoryId(event.target.value);
+              setAnalysisRun(null);
+              setAnalysisBusy(false);
+              setRepositoryMessage('');
+            }}
+            aria-label="Repository đã liên kết"
+          >
+            <option value="">Chọn repository đã liên kết</option>
+            {repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.fullName}</option>)}
+          </select>
+          <button
+            type="button"
+            className="ld-btn ld-btn-secondary"
+            onClick={() => browseRepository(browserRepositoryId)}
+            disabled={!browserRepositoryId || contentLoading}
+          >
+            Mở nội dung repo
+          </button>
+          {(userRole === 'Developer' || userRole === 'TechLead' || userRole === 'Technical Lead' || userRole === 'Administrator') && (
+            <button
+              type="button"
+              className="ld-btn ld-btn-secondary"
+              onClick={startRepositoryAnalysis}
+              disabled={!browserRepositoryId || analysisBusy}
+            >
+              {analysisBusy ? 'Đang phân tích…' : 'Phân tích repository'}
+            </button>
+          )}
+        </div>
+        {analysisRun && <p role="status" style={{ margin: '8px 0 0', fontSize: 13 }}>
+          Analysis run: {analysisRun.status} {analysisRun.headCommitSha ? `· ${analysisRun.headCommitSha}` : ''}
+        </p>}
+        {browserRepositoryId && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 13 }}>
+              <button type="button" className="ld-btn ld-btn-ghost" onClick={() => browseRepository(browserRepositoryId)}>/</button>
+              {repositoryPath.split('/').filter(Boolean).map((segment, index, segments) => {
+                const path = segments.slice(0, index + 1).join('/');
+                return <React.Fragment key={path}><span>/</span><button type="button" className="ld-btn ld-btn-ghost" onClick={() => browseRepository(browserRepositoryId, path)}>{segment}</button></React.Fragment>;
+              })}
+            </div>
+            {contentLoading && <p role="status">Đang tải nội dung GitHub…</p>}
+            {contentError && <p role="alert" style={{ color: '#b91c1c' }}>{contentError}</p>}
+            {!contentLoading && !contentError && !repositoryFile && repositoryEntries.length === 0 && (
+              <p style={{ color: '#64748b', fontSize: 13 }}>Thư mục trống hoặc chưa mở repository.</p>
+            )}
+            {!contentLoading && !contentError && repositoryEntries.length > 0 && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                {repositoryEntries.map((entry) => (
+                  <button
+                    type="button"
+                    key={entry.path}
+                    onClick={() => openRepositoryEntry(entry)}
+                    style={{ width: '100%', display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 12px', border: 0, borderBottom: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', textAlign: 'left' }}
+                  >
+                    <span>{entry.type === 'dir' ? '📁' : '📄'} {entry.name}</span>
+                    <span style={{ color: '#64748b', fontSize: 12 }}>{entry.type === 'file' ? `${entry.size.toLocaleString()} bytes` : 'Thư mục'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {repositoryFile && (
+              <div style={{ marginTop: 12, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 12px', background: '#f8fafc', fontSize: 13 }}>
+                  <strong>{repositoryFile.path}</strong>
+                  {repositoryFile.htmlUrl && <a href={repositoryFile.htmlUrl} target="_blank" rel="noreferrer">Mở trên GitHub</a>}
+                </div>
+                <pre style={{ maxHeight: 480, overflow: 'auto', margin: 0, padding: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12 }}>{repositoryFile.content}</pre>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* Filter and Search Bar */}
       <div
@@ -149,7 +418,7 @@ export default function DocumentListPage({ onNavigate, userRole = 'Developer' })
               <option value="">{t('documents.allRepos')}</option>
               {repositories.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name}
+                  {r.fullName || r.full_name || r.name}
                 </option>
               ))}
             </select>

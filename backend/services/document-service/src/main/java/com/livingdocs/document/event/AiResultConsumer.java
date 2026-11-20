@@ -37,6 +37,7 @@ public class AiResultConsumer {
             }
         } catch (Exception ex) {
             log.error("Failed to process event from ld.ai-results: {}", ex.getMessage(), ex);
+            throw new IllegalStateException("Could not persist AI result; allow Kafka redelivery", ex);
         }
     }
 }

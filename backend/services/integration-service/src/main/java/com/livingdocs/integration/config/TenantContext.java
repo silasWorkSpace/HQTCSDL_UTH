@@ -7,10 +7,6 @@ package com.livingdocs.integration.config;
  */
 public final class TenantContext {
 
-    private static final String DEFAULT_TENANT = "demo";
-    private static final String PREFIX = "ws_";
-    private static final ThreadLocal<String> CURRENT_TENANT = ThreadLocal.withInitial(() -> DEFAULT_TENANT);
-
     private TenantContext() {
     }
 
@@ -18,35 +14,35 @@ public final class TenantContext {
      * Chuẩn hóa mã tenant về dạng không có tiền tố ws_ (ví dụ: "ws_demo" -> "demo").
      */
     public static String normalizeTenant(String tenant) {
-        if (tenant == null || tenant.isBlank()) {
-            return DEFAULT_TENANT;
-        }
-        String clean = tenant.trim().toLowerCase().replaceAll("[^a-z0-9_]", "");
-        if (clean.startsWith(PREFIX)) {
-            clean = clean.substring(PREFIX.length());
-        }
-        return clean.isBlank() ? DEFAULT_TENANT : clean;
+        String code = tenant == null ? "" : tenant.trim();
+        if (code.startsWith("ws_")) code = code.substring(3);
+        if (!code.matches("[a-z0-9_]{2,30}")) throw new IllegalArgumentException("Mã tenant không hợp lệ");
+        return code;
     }
 
     /**
      * Mã tenant chuẩn (ví dụ: "demo").
      */
     public static String getTenant() {
-        return normalizeTenant(CURRENT_TENANT.get());
+        return com.livingdocs.common.security.TenantContext.getTenant();
     }
 
     /**
      * Tên schema SQL Server chuẩn (ví dụ: "ws_demo").
      */
     public static String getSchemaName() {
-        return PREFIX + getTenant();
+        return com.livingdocs.common.security.TenantContext.schema();
     }
 
     public static void setTenant(String tenant) {
-        CURRENT_TENANT.set(normalizeTenant(tenant));
+        com.livingdocs.common.security.TenantContext.setTenant(tenant);
     }
 
     public static void clear() {
-        CURRENT_TENANT.remove();
+        com.livingdocs.common.security.TenantContext.clear();
+    }
+
+    public static <T> T runWith(String tenant, java.util.function.Supplier<T> action) {
+        return com.livingdocs.common.security.TenantContext.runWith(tenant, action);
     }
 }

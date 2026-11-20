@@ -43,6 +43,9 @@ public class ReviewService {
 
     @Transactional
     public ReviewTaskView submit(String tenant, UUID documentId, CurrentUser user) {
+        if (!user.hasAnyRole("Developer", "Technical Lead", "Administrator")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vai trò hiện tại không được nộp tài liệu duyệt");
+        }
         DocumentRow doc = repo.findDocument(tenant, documentId)
                 .orElseThrow(() -> notFound("Tài liệu"));
         if (!"DRAFT".equals(doc.docStatus()) && !"CHANGES_REQUESTED".equals(doc.docStatus())
@@ -71,6 +74,18 @@ public class ReviewService {
                 repo.listQueue(tenant, "Staff").stream()
                         .filter(t -> t.documentId().equals(documentId)).findFirst()
                         .orElse(null), tenant);
+    }
+
+    @Transactional
+    public void onDocumentationPullRequestClosed(String tenant, UUID documentId, boolean merged) {
+        DocumentRow doc = repo.findDocument(tenant, documentId).orElse(null);
+        if (doc == null || !"PENDING_MERGE".equals(doc.docStatus())) return;
+        repo.transitionDocument(tenant, documentId, merged ? "PUBLISHED" : "APPROVED", "system", null);
+        audit.record(tenant, null, "system", merged ? "DOC_PR_MERGED" : "DOC_PR_CLOSED",
+                "document", documentId, null, "{\"merged\":" + merged + "}");
+        notify.notifyUser(tenant, doc.ownerId(), merged ? "DOC_PUBLISHED" : "DOC_PR_CLOSED",
+                merged ? "Documentation PR merged; document is now published"
+                        : "Documentation PR closed without merge; approval can be retried", null);
     }
 
     /* ---------- hàng đợi (FR-WF-01, FR-WF-12) ---------- */
@@ -205,12 +220,20 @@ public class ReviewService {
                     .filter(t -> t.documentId().equals(doc.id())).findFirst()
                     .map(TaskRow::id).orElse(null);
         }
-        // FR-WF-14/16: Manager phê duyệt cuối → publish (giả lập tuần này)
+        // Final approval is committed to GitHub before the document is marked published.
         repo.transitionDocument(tenant, doc.id(), "APPROVED", actorRole, user.userId());
+        if (doc.repositoryId() == null || doc.pathInRepo() == null || doc.pathInRepo().isBlank()) {
+            throw conflict("Tài liệu chưa được gắn với repository và đường dẫn GitHub");
+        }
+        VersionRow approvedVersion = repo.findVersion(tenant, task.documentVersionId())
+                .orElseThrow(() -> notFound("Phiên bản đã duyệt"));
+        PublishPort.PublicationResult publication = publishPort.publish(doc.repositoryId(), doc.id(),
+                doc.pathInRepo(), doc.title(), approvedVersion.content(), user.bearerToken());
+        repo.transitionDocument(tenant, doc.id(), "PENDING_MERGE", "system", null);
+        repo.recordDocumentationPullRequest(tenant, doc.id(), publication.pullRequestNumber());
         repo.updateTaskStatus(tenant, task.id(), "Completed");
-        publishPort.publish(tenant, doc.id());
-        notify.notifyUser(tenant, doc.ownerId(), "DOC_PUBLISHED",
-                "Tài liệu \"" + doc.title() + "\" đã được phê duyệt và publish (giả lập)", null);
+        notify.notifyUser(tenant, doc.ownerId(), "DOC_PENDING_MERGE",
+                "Tài liệu \"" + doc.title() + "\" đã được phê duyệt và publish lên GitHub", null);
         return null;
     }
 
@@ -235,7 +258,7 @@ public class ReviewService {
         if (user.roles() != null && !user.roles().isEmpty()) {
             return user.roles().get(0);
         }
-        return "Developer";
+        throw new IllegalStateException("Authenticated user has no role");
     }
 
     private ReviewTaskView toTaskView(String tenant, TaskRow t, String ignoredTenant) {

@@ -92,9 +92,9 @@ export default function DraftEditorPage({
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      if (err?.response?.status === 409) {
+        if (err?.status === 409 || err?.response?.status === 409) {
         setConflictData({
-          message: err.response.data?.detail || 'Bản nháp đã thay đổi ở một phiên làm việc khác.',
+            message: err?.detail || err?.response?.data?.detail || 'Bản nháp đã thay đổi ở một phiên làm việc khác.',
         });
       } else {
         setError(err?.response?.data?.detail || err.message || 'Lỗi khi lưu bản nháp');

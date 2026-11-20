@@ -39,14 +39,13 @@ export default function LoginPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await authApi.loginWithEmail(tenant.trim(), email.trim(), password);
+      await authApi.loginWithEmail(tenant.trim(), email.trim(), password);
 
-      if (res.accessToken) {
-        localStorage.setItem('ld_token', res.accessToken);
-        if (res.refreshToken) localStorage.setItem('ld_refresh_token', res.refreshToken);
-        localStorage.setItem('ld_tenant', tenant.trim());
-        navigate('/documents');
-      }
+      localStorage.removeItem('ld_token');
+      localStorage.removeItem('ld_refresh_token');
+      localStorage.removeItem('ld_github_connection_id');
+      window.dispatchEvent(new Event('livingdocs:session-changed'));
+      navigate('/documents');
     } catch (err) {
       setError(err?.detail || err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
@@ -62,7 +61,6 @@ export default function LoginPage() {
 
       // Định tuyến callback URL về frontend
       const redirectUri = `${window.location.origin}/auth/callback`;
-      localStorage.setItem('ld_tenant', tenant.trim());
 
       const res = await authApi.getGitHubAuthUrl(tenant.trim(), redirectUri);
       if (res && res.url) {
@@ -71,11 +69,7 @@ export default function LoginPage() {
         throw new Error('Không nhận được URL xác thực từ hệ thống.');
       }
     } catch (err) {
-      console.warn('Backend chưa khởi động hoặc chưa có endpoint, chuyển hướng chế độ Dev Mock:', err);
-      // Fallback cho môi trường dev khi backend chưa nạp endpoint mới
-      const redirectUri = `${window.location.origin}/auth/callback?code=mock_github_code_${tenant.trim()}&state=${tenant.trim()}`;
-      window.location.href = redirectUri;
-    } finally {
+      setError(err?.detail || err?.message || 'Không thể bắt đầu đăng nhập GitHub.');
       setGithubLoading(false);
     }
   };

@@ -35,14 +35,14 @@ Dịch vụ `integration-service` chịu trách nhiệm toàn bộ các giao ti�
 |---|---|---|
 | `SERVER_PORT` | `8082` | Cổng HTTP của service |
 | `SPRING_DATASOURCE_URL` | `jdbc:sqlserver://localhost:1433;databaseName=livingdocs;trustServerCertificate=true;encrypt=false` | Chuỗi kết nối SQL Server |
-| `SPRING_DATASOURCE_USERNAME` | `sa` | Tài khoản CSDL |
-| `SPRING_DATASOURCE_PASSWORD` | `Password123!` | Mật khẩu CSDL |
+| `SPRING_DATASOURCE_USERNAME` | *(required)* | Principal ứng dụng CSDL quyền tối thiểu |
+| `SPRING_DATASOURCE_PASSWORD` | *(required)* | Secret do môi trường triển khai cấp |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost:6379` | Địa chỉ máy chủ Redis cache |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Địa chỉ Kafka Broker |
-| `TOKEN_ENCRYPTION_KEY` | *(Key mẫu 32-byte Base64)* | Khóa bí mật 256-bit dùng cho AES-GCM (NFR-SEC-04) |
-| `GITHUB_WEBHOOK_SECRET` | `development_webhook_secret_key_123456` | Secret dùng để xác thực HMAC Webhook |
-| `GITHUB_APP_ID` | `123456` | ID của GitHub App |
-| `GITHUB_APP_PRIVATE_KEY_PEM` | *Trống* | Nội dung private key PEM của GitHub App (nếu để trống, service tự sinh mock token) |
+| `TOKEN_ENCRYPTION_KEY` | *(required)* | Key 256-bit Base64 cho AES-GCM (NFR-SEC-04) |
+| `GITHUB_WEBHOOK_SECRET` | *(required)* | Secret do môi trường triển khai cấp để xác thực HMAC webhook |
+| `GITHUB_APP_ID` | *(required only for GitHub App auth)* | ID của GitHub App |
+| `GITHUB_APP_PRIVATE_KEY_PEM` | *(required only for GitHub App auth)* | Private key PEM; thiếu cấu hình thì GitHub App auth fail closed |
 
 ---
 

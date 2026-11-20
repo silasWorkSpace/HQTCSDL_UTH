@@ -10,6 +10,7 @@ import com.livingdocs.identity.repository.UserRepository;
 import com.livingdocs.identity.repository.UserRepository.GithubUserProvisionResult;
 import com.livingdocs.identity.repository.WorkspaceRepository;
 import com.livingdocs.identity.service.AuthService;
+import com.livingdocs.identity.service.GitHubLoginProvisioner;
 import com.livingdocs.identity.service.TokenService;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -24,7 +25,7 @@ import static org.mockito.Mockito.*;
 class GitHubOAuthTest {
 
     @Test
-    void testGetGitHubAuthUrl_RealClientId() {
+    void githubOAuthUrlFailsClosedWithoutRedisBackedState() {
         GitHubOAuthProperties props = new GitHubOAuthProperties(
                 "real-client-id-12345",
                 "test-secret",
@@ -38,19 +39,16 @@ class GitHubOAuthTest {
                 mock(TokenService.class),
                 mock(AuditService.class),
                 mock(IdentityProperties.class),
-                props
+                props,
+                mock(GitHubLoginProvisioner.class)
         );
 
-        GitHubAuthUrlResponse response = authService.getGitHubAuthUrl("demo", "http://localhost:5173/auth/callback");
-        assertNotNull(response);
-        assertTrue(response.url().startsWith("https://github.com/login/oauth/authorize"));
-        assertTrue(response.url().contains("client_id=real-client-id-12345"));
-        assertTrue(response.url().contains("scope=read%3Auser%2Cuser%3Aemail%2Crepo"));
-        assertTrue(response.url().contains("state=demo"));
+        assertThrows(RuntimeException.class,
+                () -> authService.getGitHubAuthUrl("demo", "http://localhost:5173/auth/callback"));
     }
 
     @Test
-    void testGetGitHubAuthUrl_PlaceholderClientId() {
+    void githubOAuthDoesNotReturnMockCallbackWhenConfigurationIsMissing() {
         GitHubOAuthProperties props = new GitHubOAuthProperties(
                 "your-github-client-id",
                 "test-secret",
@@ -64,13 +62,12 @@ class GitHubOAuthTest {
                 mock(TokenService.class),
                 mock(AuditService.class),
                 mock(IdentityProperties.class),
-                props
+                props,
+                mock(GitHubLoginProvisioner.class)
         );
 
-        GitHubAuthUrlResponse response = authService.getGitHubAuthUrl("demo", "http://localhost:5173/auth/callback");
-        assertNotNull(response);
-        assertTrue(response.url().startsWith("http://localhost:5173/auth/callback"));
-        assertTrue(response.url().contains("code=mock_github_code_demo"));
+        assertThrows(RuntimeException.class,
+                () -> authService.getGitHubAuthUrl("demo", "http://localhost:5173/auth/callback"));
     }
 
     @Test
@@ -128,7 +125,7 @@ class GitHubOAuthTest {
     }
 
     @Test
-    void testGetGitHubRepositories_MockFallback() {
+    void githubRepositoryLookupRejectsMissingToken() {
         GitHubOAuthProperties props = new GitHubOAuthProperties(
                 "your-github-client-id",
                 "test-secret",
@@ -142,12 +139,10 @@ class GitHubOAuthTest {
                 mock(TokenService.class),
                 mock(AuditService.class),
                 mock(IdentityProperties.class),
-                props
+                props,
+                mock(GitHubLoginProvisioner.class)
         );
 
-        var repos = authService.getGitHubRepositories(null);
-        assertNotNull(repos);
-        assertFalse(repos.isEmpty());
-        assertEquals("livingdocs-core", repos.get(0).name());
+        assertThrows(RuntimeException.class, () -> authService.getGitHubRepositories(null));
     }
 }

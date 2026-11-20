@@ -5,7 +5,7 @@ import apiClient from '../../services/api/apiClient';
  */
 export const authApi = {
   // Lấy URL chuyển hướng GitHub OAuth
-  getGitHubAuthUrl: async (tenant = 'demo', redirectUri) => {
+  getGitHubAuthUrl: async (tenant, redirectUri) => {
     const params = new URLSearchParams();
     if (tenant) params.append('tenant', tenant);
     if (redirectUri) params.append('redirectUri', redirectUri);
@@ -14,27 +14,18 @@ export const authApi = {
   },
 
   // Gửi callback code từ GitHub để nhận JWT Token
-  callbackGitHub: async ({ code, tenant = 'demo', redirectUri }) => {
+  callbackGitHub: async ({ code, state, redirectUri }) => {
     const res = await apiClient.post('/api/v1/auth/github/callback', {
       code,
-      tenant,
+      state,
       redirectUri,
-    });
+    }, { timeout: 60000 });
     return res.data;
   },
 
   // Lấy danh sách Repositories từ GitHub của người dùng đã ủy quyền
-  getGitHubRepos: async (githubToken) => {
-    const headers = {};
-    if (githubToken) {
-      headers['X-GitHub-Token'] = githubToken;
-    }
-    const res = await apiClient.get('/api/v1/auth/github/repos', { headers });
-    return res.data;
-  },
-
   // Đăng nhập bằng Email / Mật khẩu
-  loginWithEmail: async (tenant = 'demo', email, password) => {
+  loginWithEmail: async (tenant, email, password) => {
     const res = await apiClient.post('/api/v1/auth/login', {
       tenant,
       email,
@@ -42,6 +33,8 @@ export const authApi = {
     });
     return res.data;
   },
+
+  logout: async () => apiClient.post('/api/v1/auth/logout'),
 };
 
 export default authApi;

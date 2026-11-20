@@ -1,4 +1,4 @@
-import axios from 'axios';
+import apiClient from '../../services/api/apiClient.js';
 import {
   MOCK_TEMPLATES,
   MOCK_COLLECTIONS,
@@ -6,23 +6,14 @@ import {
 } from '../../mocks/templates.js';
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
-const isMockMode = env.VITE_API_MODE === 'mock' || !env.VITE_API_MODE;
+const isMockMode = Boolean(import.meta.env?.DEV && env.VITE_API_MODE === 'mock');
 const BASE_URL = env.VITE_GOVERNANCE_API_URL || '/api/v1/governance';
-
-const http = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const http = {
+  get: (path, config) => apiClient.get(`${BASE_URL}${path}`, config),
+  post: (path, data, config) => apiClient.post(`${BASE_URL}${path}`, data, config),
+  put: (path, data, config) => apiClient.put(`${BASE_URL}${path}`, data, config),
+  delete: (path, config) => apiClient.delete(`${BASE_URL}${path}`, config),
+};
 
 let activeMockTemplates = [...MOCK_TEMPLATES];
 let activeMockCollections = [...MOCK_COLLECTIONS];
@@ -200,12 +191,8 @@ export const templatesApi = {
       return activeMockVersions[id] || [];
     }
 
-    try {
-      const res = await http.get(`/templates/${id}/versions`);
-      return res.data;
-    } catch {
-      return activeMockVersions[id] || [];
-    }
+    const res = await http.get(`/templates/${id}/versions`);
+    return res.data;
   },
 
   /**
@@ -228,6 +215,61 @@ export const templatesApi = {
       return { success: true, message: 'Đã seed dữ liệu mẫu.' };
     }
     const res = await http.post('/templates/seed');
+    return res.data;
+  },
+
+  /**
+   * Rollback template to a previous version.
+   */
+  async rollbackTemplate(id, targetVersionNo, changeNote) {
+    if (isMockMode) {
+      const versions = activeMockVersions[id] || [];
+      const target = versions.find(v => v.versionNo === targetVersionNo);
+      if (!target) throw new Error('Target version not found');
+      return this.updateTemplate(id, {
+        sections: target.sections,
+        formatRules: target.formatRules,
+      });
+    }
+    const res = await http.post(`/templates/${id}/rollback`, {
+      targetVersionNo,
+      changeNote,
+    });
+    return res.data;
+  },
+
+  /**
+   * Preview template render with variables.
+   */
+  async previewTemplate(id, { sections, formatRules, variables } = {}) {
+    const sectionsStr = typeof sections === 'string' ? sections : sections ? JSON.stringify(sections) : null;
+    const formatRulesStr = typeof formatRules === 'string' ? formatRules : formatRules ? JSON.stringify(formatRules) : null;
+    const path = id ? `/templates/${id}/preview` : `/templates/preview`;
+    const res = await http.post(path, {
+      sections: sectionsStr,
+      formatRules: formatRulesStr,
+      variables,
+    });
+    return res.data;
+  },
+
+  async getCollectionById(id) {
+    const res = await http.get(`/collections/${id}`);
+    return res.data;
+  },
+
+  async createCollection({ name, description, ownerId, defaultTemplateId }) {
+    const res = await http.post('/collections', { name, description, ownerId, defaultTemplateId });
+    return res.data;
+  },
+
+  async updateCollection(id, { name, description, ownerId, defaultTemplateId }) {
+    const res = await http.put(`/collections/${id}`, { name, description, ownerId, defaultTemplateId });
+    return res.data;
+  },
+
+  async deleteCollection(id) {
+    const res = await http.delete(`/collections/${id}`);
     return res.data;
   },
 };

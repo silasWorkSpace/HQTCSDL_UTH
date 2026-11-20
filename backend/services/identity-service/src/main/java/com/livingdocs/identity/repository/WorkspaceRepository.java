@@ -21,4 +21,16 @@ public class WorkspaceRepository {
                 .single();
         return n != null && n > 0;
     }
+
+    public boolean allowsGitHubSignup(String code) {
+        String cleanCode = (code != null && code.startsWith("ws_")) ? code.substring(3) : code;
+        String policy = db.platform("SELECT JSON_VALUE(config, '$.github_signup') "
+                        + "FROM platform.workspace WHERE (code = :code OR schema_name = :rawCode) AND status = 'active'")
+                .param("code", cleanCode)
+                .param("rawCode", code)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+        return "open".equalsIgnoreCase(policy);
+    }
 }
