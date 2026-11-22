@@ -33,13 +33,12 @@ export default function DriftHistoryPage() {
     return () => { active = false }
   }, [])
 
-  // Load drift alerts for the chosen document
+  // Load drift alerts (all or for the chosen document)
   useEffect(() => {
-    if (!documentId) { setAlerts([]); return undefined }
     let active = true
     setLoading(true)
     setError('')
-    listDriftAlerts(documentId)
+    listDriftAlerts(documentId || undefined)
       .then((items) => { if (active) setAlerts((items || []).map(normalizeDriftAlert)) })
       .catch((e) => { if (active) setError(e?.detail || e?.message || 'Không tải được lịch sử drift.') })
       .finally(() => { if (active) setLoading(false) })
@@ -85,7 +84,7 @@ export default function DriftHistoryPage() {
               onChange={(e) => setFilter('documentId', e.target.value)}
               style={{ padding: '6px 12px', fontSize: '13px' }}
             >
-              <option value="">-- Chọn tài liệu tra cứu ({documents.length}) --</option>
+              <option value="">Tất cả tài liệu ({documents.length})</option>
               {documents.map((doc) => (
                 <option key={doc.id} value={doc.id}>{doc.title}</option>
               ))}
@@ -123,25 +122,14 @@ export default function DriftHistoryPage() {
           </select>
         </label>
 
-        {documentId && (
-          <div style={{ marginLeft: 'auto', alignSelf: 'flex-end', fontSize: '13px', color: '#64748b' }}>
-            Đang lọc: <strong>{selectedDocTitle}</strong> ({filtered.length} cảnh báo)
-          </div>
-        )}
-      </div>
-
-      {/* Main Alert List */}
-      {!documentId && (
-        <div className="ld-card" style={{ padding: '48px 24px', textAlign: 'center', color: '#64748b' }}>
-          <Layers size={36} style={{ color: '#94a3b8', marginBottom: 12 }} />
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', margin: '0 0 6px 0' }}>
-            Vui lòng chọn tài liệu kỹ thuật
-          </h3>
-          <p style={{ fontSize: '13px', margin: 0 }}>
-            Chọn tài liệu từ danh sách phía trên để tra cứu toàn bộ lịch sử drift và bằng chứng thay đổi code.
-          </p>
+        <div style={{ marginLeft: 'auto', alignSelf: 'flex-end', fontSize: '13px', color: '#64748b' }}>
+          {documentId ? (
+            <>Đang lọc: <strong>{selectedDocTitle}</strong> ({filtered.length} cảnh báo)</>
+          ) : (
+            <>Hiển thị: <strong>Tất cả tài liệu</strong> ({filtered.length} cảnh báo)</>
+          )}
         </div>
-      )}
+      </div>
 
       {loading && (
         <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
@@ -155,14 +143,16 @@ export default function DriftHistoryPage() {
         </div>
       )}
 
-      {!loading && documentId && !error && filtered.length === 0 && (
+      {!loading && !error && filtered.length === 0 && (
         <div className="ld-card" style={{ padding: '40px 24px', textAlign: 'center', color: '#64748b' }}>
           <ShieldAlert size={36} style={{ color: '#16a34a', marginBottom: 12 }} />
           <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#166534', margin: '0 0 6px 0' }}>
             Không có cảnh báo drift nào
           </h3>
           <p style={{ fontSize: '13px', margin: 0 }}>
-            Tài liệu này hiện hoàn toàn đồng bộ với mã nguồn và chưa phát hiện thay đổi bất thường nào.
+            {documentId
+              ? 'Tài liệu này hiện hoàn toàn đồng bộ với mã nguồn và chưa phát hiện thay đổi bất thường nào.'
+              : 'Hiện tại hệ thống không phát hiện bất kỳ cảnh báo drift nào trên các tài liệu kỹ thuật.'}
           </p>
         </div>
       )}
@@ -183,6 +173,16 @@ export default function DriftHistoryPage() {
               <Clock size={13} />
               <span>{alert.createdAt ? new Date(alert.createdAt).toLocaleString('vi-VN') : '—'}</span>
             </div>
+          </div>
+
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px' }}>
+            <span style={{ color: '#64748b', fontWeight: 500 }}>Tài liệu:</span>
+            <Link
+              to={`/documents/${alert.documentId}`}
+              style={{ fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}
+            >
+              {alert.documentTitle || documents.find((d) => d.id === alert.documentId)?.title || alert.documentId}
+            </Link>
           </div>
 
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: '13px', color: '#475569', marginBottom: 12 }}>

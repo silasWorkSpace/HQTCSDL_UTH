@@ -326,11 +326,17 @@ public class WorkflowRepository {
     };
 
     public List<Map<String, Object>> listDriftAlerts(String tenant, UUID documentId) {
-        return jdbc.query("SELECT id, source_event_id, document_id, drift_type, severity, "
-                        + "evidence, handling_status, created_at FROM "
-                        + TenantSchema.qualify(tenant, "drift_alert")
-                        + " WHERE document_id = ? ORDER BY created_at DESC",
-                GENERIC_MAPPER, documentId);
+        String alertTable = TenantSchema.qualify(tenant, "drift_alert");
+        String docTable = TenantSchema.qualify(tenant, "document");
+        String sql = "SELECT a.id, a.source_event_id, a.document_id, d.title AS document_title, a.drift_type, a.severity, "
+                + "a.evidence, a.handling_status, a.created_at FROM " + alertTable + " a LEFT JOIN "
+                + docTable + " d ON d.id = a.document_id";
+        if (documentId != null) {
+            sql += " WHERE a.document_id = ? ORDER BY a.created_at DESC";
+            return jdbc.query(sql, GENERIC_MAPPER, documentId);
+        }
+        sql += " ORDER BY a.created_at DESC";
+        return jdbc.query(sql, GENERIC_MAPPER);
     }
 
     public List<Map<String, Object>> listSuggestions(String tenant, String status) {

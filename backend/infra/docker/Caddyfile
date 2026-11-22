@@ -11,7 +11,7 @@
 		reverse_proxy integration-service:8082
 	}
 
-	@workflow path /api/v1/reviews* /api/v1/suggestions*
+	@workflow path /api/v1/reviews* /api/v1/suggestions* /api/v1/drift-alerts*
 	@workflowDocument path_regexp workflowDocument ^/api/v1/documents/[^/]+/(submit|drift-alerts)(/.*)?$
 	handle @workflow {
 		reverse_proxy workflow-service:8084

@@ -16,6 +16,10 @@ export async function listSuggestions(status) {
 }
 
 export async function listDriftAlerts(documentId) {
+  if (!documentId) {
+    const { data } = await http().get(`${API}/drift-alerts`)
+    return data
+  }
   const { data } = await http().get(`${API}/documents/${documentId}/drift-alerts`)
   return data
 }

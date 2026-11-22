@@ -88,6 +88,7 @@ export function normalizeDriftAlert(raw) {
     id: raw.id,
     sourceEventId: pick(raw, 'source_event_id', 'sourceEventId'),
     documentId: pick(raw, 'document_id', 'documentId'),
+    documentTitle: pick(raw, 'document_title', 'documentTitle') || '',
     driftType: pick(raw, 'drift_type', 'driftType'),
     severity: pick(raw, 'severity'),
     evidence: normalizeEvidence(pick(raw, 'evidence')),

@@ -33,6 +33,14 @@ public class DriftController {
         return driftService.driftAlerts(AuthContext.get().tenant(), id);
     }
 
+    /** DR-12: Danh sách toàn bộ lịch sử drift (tất cả hoặc theo ?documentId=). */
+    @GetMapping("/drift-alerts")
+    @RequireRole({"Developer", "Staff", "Manager", "Technical Lead", "Administrator"})
+    public List<Map<String, Object>> allDriftAlerts(
+            @RequestParam(name = "documentId", required = false) UUID documentId) {
+        return driftService.driftAlerts(AuthContext.get().tenant(), documentId);
+    }
+
     /** AUTO-02: hàng đợi gợi ý của Developer; lọc theo ?status= (mặc định Pending Developer Action). */
     @GetMapping("/suggestions")
     @RequireRole({"Developer", "Staff", "Manager", "Technical Lead", "Administrator"})

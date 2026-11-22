@@ -60,6 +60,10 @@ export default defineConfig({
         target: 'http://localhost:8084',
         changeOrigin: true,
       },
+      '/api/v1/drift-alerts': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+      },
       '/api/v1/governance': {
         target: 'http://localhost:8085',
         changeOrigin: true,
