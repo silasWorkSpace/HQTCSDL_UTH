@@ -53,6 +53,24 @@ export default function LoginPage() {
     }
   };
 
+  // Đăng nhập nhanh chế độ Demo (1-click)
+  const handleQuickDemoLogin = async (demoEmail, demoRoles) => {
+    try {
+      setLoading(true);
+      setError(null);
+      await authApi.devLogin(tenant.trim() || 'demo', demoEmail, demoRoles);
+      localStorage.removeItem('ld_token');
+      localStorage.removeItem('ld_refresh_token');
+      localStorage.removeItem('ld_github_connection_id');
+      window.dispatchEvent(new Event('livingdocs:session-changed'));
+      navigate('/documents');
+    } catch (err) {
+      setError(err?.detail || err?.message || 'Đăng nhập demo thất bại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Xử lý chuyển hướng GitHub OAuth (FR-AUTH-02)
   const handleGithubLogin = async () => {
     try {
@@ -300,6 +318,69 @@ export default function LoginPage() {
           {loading ? (t('auth.loggingIn') || 'Đang đăng nhập...') : (t('auth.btnLogin') || 'Đăng nhập')}
           <ArrowRight size={16} />
         </button>
+
+        {/* Quick 1-Click Demo Personas */}
+        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+          <p style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textAlign: 'center', margin: '0 0 10px 0' }}>
+            ⚡ Đăng nhập nhanh chế độ Demo (1-click):
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            <button
+              type="button"
+              disabled={loading || githubLoading}
+              onClick={() => handleQuickDemoLogin('developer1@example.com', ['Developer'])}
+              style={{
+                padding: '8px 4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: '#f1f5f9',
+                color: '#1e293b',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              👩‍💻 Alice (Dev)
+            </button>
+            <button
+              type="button"
+              disabled={loading || githubLoading}
+              onClick={() => handleQuickDemoLogin('staff1@example.com', ['Staff'])}
+              style={{
+                padding: '8px 4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: '#f1f5f9',
+                color: '#1e293b',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              🔍 Bob (Staff)
+            </button>
+            <button
+              type="button"
+              disabled={loading || githubLoading}
+              onClick={() => handleQuickDemoLogin('manager1@example.com', ['Manager'])}
+              style={{
+                padding: '8px 4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: '#f1f5f9',
+                color: '#1e293b',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              👔 Carol (Manager)
+            </button>
+          </div>
+        </div>
       </form>
     </AuthLayout>
   );

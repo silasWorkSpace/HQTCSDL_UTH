@@ -75,6 +75,7 @@ export function useQuery({ queryKey = [], queryFn, select, enabled = true }) {
 
   return {
     ...state,
+    isLoading: state.isPending,
     refetch: fetchData,
   };
 }

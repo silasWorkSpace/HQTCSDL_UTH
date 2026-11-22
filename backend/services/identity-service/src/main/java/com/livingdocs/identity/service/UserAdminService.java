@@ -2,16 +2,19 @@ package com.livingdocs.identity.service;
 
 import com.livingdocs.common.audit.AuditService;
 import com.livingdocs.common.error.ApiException;
+import com.livingdocs.common.security.LdSecurityProperties;
 import com.livingdocs.common.security.Roles;
 import com.livingdocs.identity.domain.UserRecord;
 import com.livingdocs.identity.dto.UserResponse;
 import com.livingdocs.identity.repository.RoleRepository;
 import com.livingdocs.identity.repository.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +28,16 @@ public class UserAdminService {
     private final UserRepository users;
     private final RoleRepository roles;
     private final AuditService audit;
+    private final TokenService tokens;
+    private final LdSecurityProperties security;
 
-    public UserAdminService(UserRepository users, RoleRepository roles, AuditService audit) {
+    public UserAdminService(UserRepository users, RoleRepository roles, AuditService audit,
+                            TokenService tokens, LdSecurityProperties security) {
         this.users = users;
         this.roles = roles;
         this.audit = audit;
+        this.tokens = tokens;
+        this.security = security;
     }
 
     public UserResponse me(UUID userId) {
@@ -74,6 +82,32 @@ public class UserAdminService {
         users.updateStatus(userId, status);
         UUID actorId = UUID.fromString(actor.getSubject());
         audit.record("user.status_changed", "user", actorId, null, "app_user", userId, Map.of("status", status));
+    }
+
+    @Transactional
+    public UserResponse switchRole(UUID userId, String newRole, Jwt actor, HttpServletResponse response) {
+        String role = newRole != null ? newRole.trim() : "";
+        if (!Roles.ALL.contains(role)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Vai trò không hợp lệ",
+                    "Vai trò phải là một trong: " + String.join(", ", Roles.ALL));
+        }
+        UserRecord user = find(userId);
+        roles.deleteWorkspaceRoles(userId);
+        roles.addWorkspaceRole(userId, role, userId);
+
+        String tenant = actor != null ? actor.getClaim("tenant") : "demo";
+        if (tenant == null || tenant.isBlank()) {
+            tenant = "demo";
+        }
+        String access = tokens.issueAccessToken(userId, tenant, user.email(), List.of(role));
+        if (response != null) {
+            response.addHeader("Set-Cookie", ResponseCookie.from("ld_access", access)
+                    .httpOnly(true).secure(false).path("/").sameSite("Lax")
+                    .maxAge(security.accessTokenTtl()).build().toString());
+        }
+        audit.record("user.role_switched", "user", userId, null, "app_user", userId,
+                Map.of("role", role));
+        return toResponse(user);
     }
 
     private UserRecord find(UUID userId) {

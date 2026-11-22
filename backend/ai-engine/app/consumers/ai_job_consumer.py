@@ -135,11 +135,31 @@ class AiJobConsumer:
         if not {str(sid).lower() for sid in selected_ids}.issubset(entity_ids):
             raise ValueError("Selected code entity IDs do not match supplied indexed entities")
 
-        template = {"id": payload.get("templateId"), "name": title, "sections": [
-            {"key": "overview", "title": "Overview", "entity_kind": "class"},
-            {"key": "endpoints", "title": "Endpoints", "entity_kind": "endpoint"},
-            {"key": "data_models", "title": "Data Models", "entity_kind": "class"},
-        ]}
+        custom_sections = payload.get("templateSections")
+        if isinstance(custom_sections, str) and custom_sections.strip():
+            try:
+                import json
+                parsed = json.loads(custom_sections)
+                if isinstance(parsed, list):
+                    custom_sections = parsed
+                elif isinstance(parsed, dict) and "sections" in parsed:
+                    custom_sections = parsed["sections"]
+            except Exception:
+                custom_sections = None
+        elif not isinstance(custom_sections, list):
+            custom_sections = None
+
+        template = {
+            "id": payload.get("templateId"),
+            "versionId": payload.get("templateVersionId"),
+            "name": title,
+            "formatRules": payload.get("formatRules"),
+            "sections": custom_sections or [
+                {"key": "overview", "title": "Overview", "entity_kind": "class"},
+                {"key": "endpoints", "title": "Endpoints", "entity_kind": "endpoint"},
+                {"key": "data_models", "title": "Data Models", "entity_kind": "class"},
+            ]
+        }
         provider = self.llm_provider or get_llm_provider()
         draft = provider.generate_doc(entities, template, {"commit_sha": commit_sha})
         sections = [{"sectionKey": s.section_key, "sectionTitle": s.section_title,

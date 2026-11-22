@@ -710,8 +710,13 @@ export default function DocumentListPage({ onNavigate, userRole = 'Developer' })
       <GenerateDocModal
         isOpen={isGenerateOpen}
         onClose={() => setIsGenerateOpen(false)}
-        onGenerated={() => {
+        onGenerated={(completedJob) => {
           fetchDocuments();
+          setIsGenerateOpen(false);
+          const docId = completedJob?.resultDocumentId || completedJob?.result_document_id || completedJob?.documentId;
+          if (docId && onNavigate) {
+            onNavigate('document-detail', { id: docId });
+          }
         }}
       />
     </div>

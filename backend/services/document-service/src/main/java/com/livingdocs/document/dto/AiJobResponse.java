@@ -4,5 +4,5 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record AiJobResponse(UUID jobId, String jobType, String status, int retryCount,
-        boolean inDlq, Instant nextRetryAt, String errorMessage, UUID resultDocumentId,
+        boolean inDlq, Instant nextRetryAt, String errorCode, String errorMessage, UUID resultDocumentId,
         Instant createdAt, Instant updatedAt) {}

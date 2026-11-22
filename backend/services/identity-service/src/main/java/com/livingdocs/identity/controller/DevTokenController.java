@@ -10,6 +10,7 @@ import com.livingdocs.identity.repository.UserRepository;
 import com.livingdocs.identity.repository.WorkspaceRepository;
 import com.livingdocs.identity.service.TokenService;
 import com.livingdocs.common.security.LdSecurityProperties;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Locale;
@@ -18,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,7 +50,7 @@ public class DevTokenController {
     }
 
     @PostMapping("/dev-token")
-    public TokenResponse devToken(@Valid @RequestBody DevTokenRequest request) {
+    public TokenResponse devToken(@Valid @RequestBody DevTokenRequest request, HttpServletResponse response) {
         for (String role : request.roles()) {
             if (!Roles.ALL.contains(role)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Vai trò không hợp lệ",
@@ -69,6 +71,11 @@ public class DevTokenController {
         LOG.warn("DEV-TOKEN: cap token khong can mat khau cho {} ({}) o tenant {}", email, request.roles(),
                 effectiveTenant);
         String access = tokens.issueAccessToken(userId, effectiveTenant, email, List.copyOf(request.roles()));
+        if (response != null) {
+            response.addHeader("Set-Cookie", ResponseCookie.from("ld_access", access)
+                    .httpOnly(true).secure(false).path("/").sameSite("Lax")
+                    .maxAge(security.accessTokenTtl()).build().toString());
+        }
         return new TokenResponse(access, null, "Bearer", security.accessTokenTtl().toSeconds());
     }
 }

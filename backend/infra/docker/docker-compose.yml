@@ -74,7 +74,7 @@ services:
       dockerfile: Dockerfile
     container_name: livingdocs-identity
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_HOST: mssql
       DB_USER: ${DB_USER:?DB_USER is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
@@ -93,7 +93,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -129,7 +129,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8082/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -160,7 +160,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8083/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -191,7 +191,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8084/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -219,7 +219,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8085/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -246,7 +246,7 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8086/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:
@@ -280,7 +280,7 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health/readiness', timeout=3)\" || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 24
+      retries: 40
       start_period: 60s
     depends_on:
       mssql:

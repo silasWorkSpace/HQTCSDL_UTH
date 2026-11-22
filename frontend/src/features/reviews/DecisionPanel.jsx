@@ -13,7 +13,7 @@ import { buildDecisionPayload, decisionBlock, decisionOptions, reasonRequired, v
  */
 export default function DecisionPanel({ task, user }) {
   const { t } = useTranslation()
-  const decide = useDecideReview(task.id)
+  const decide = useDecideReview(task?.id)
   const [decision, setDecision] = useState(null)
   const [reason, setReason] = useState('')
   const [comments, setComments] = useState([])
@@ -23,8 +23,8 @@ export default function DecisionPanel({ task, user }) {
   const block = decisionBlock({ task, user })
   const disabled = block !== null
   const blockText = block ? t(`reviews.decision.block.${block}`) : null
-  const validation = validateDecision({ decision, reason, level: task.level })
-  const isManager = String(task.level).toLowerCase() === 'manager'
+  const validation = validateDecision({ decision, reason, level: task?.level })
+  const isManager = String(task?.level || '').toLowerCase() === 'manager'
 
   const optionLabel = (value) => {
     if (value === 'APPROVE') return t(isManager ? 'reviews.decision.approveManager' : 'reviews.decision.approveStaff')
@@ -65,7 +65,7 @@ export default function DecisionPanel({ task, user }) {
           onChange={(e) => setDecision(e.target.value)}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
-          {decisionOptions(task.level).map((value) => (
+          {decisionOptions(task?.level).map((value) => (
             <Radio key={value} value={value}>{optionLabel(value)}</Radio>
           ))}
         </Radio.Group>
@@ -101,38 +101,37 @@ export default function DecisionPanel({ task, user }) {
               />
             </div>
           ))}
-          <Space.Compact style={{ width: '100%', marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <Input
-              type="number"
-              min={1}
+              size="small"
               disabled={disabled}
-              style={{ width: 80 }}
-              placeholder={t('reviews.decision.linePlaceholder')}
-              value={draft.lineNumber}
-              onChange={(e) => setDraft((d) => ({ ...d, lineNumber: e.target.value }))}
-            />
-            <Input
-              disabled={disabled}
-              placeholder={t('reviews.decision.commentPlaceholder')}
               value={draft.content}
+              placeholder={t('reviews.decision.commentPlaceholder')}
               onChange={(e) => setDraft((d) => ({ ...d, content: e.target.value }))}
               onPressEnter={addComment}
             />
-            <Button disabled={disabled || !draft.content.trim()} onClick={addComment}>{t('reviews.decision.addComment')}</Button>
-          </Space.Compact>
+            <Input
+              size="small"
+              disabled={disabled}
+              value={draft.lineNumber}
+              placeholder={t('reviews.decision.linePlaceholder')}
+              style={{ width: 64 }}
+              onChange={(e) => setDraft((d) => ({ ...d, lineNumber: e.target.value }))}
+              onPressEnter={addComment}
+            />
+            <Button size="small" disabled={disabled || !draft.content.trim()} onClick={addComment}>
+              {t('reviews.decision.addComment')}
+            </Button>
+          </div>
         </div>
 
-        {showErrors && validation.error && (
+        {showErrors && !validation.valid && (
           <Alert type="error" showIcon message={t(`reviews.decision.errors.${validation.error}`)} />
         )}
 
-        <Tooltip title={blockText}>
-          <span style={{ display: 'inline-block' }}>
-            <Button type="primary" disabled={disabled} loading={decide.isPending} onClick={submit}>
-              {t('reviews.decision.submit')}
-            </Button>
-          </span>
-        </Tooltip>
+        <Button type="primary" disabled={disabled} loading={decide.isPending} onClick={submit} style={{ width: '100%' }}>
+          {t('reviews.decision.submit')}
+        </Button>
       </Space>
     </Card>
   )

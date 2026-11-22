@@ -123,7 +123,7 @@ export default function DraftEditorPage({
 
   const isEditableStatus =
     document && (document.docStatus === 'DRAFT' || document.docStatus === 'CHANGES_REQUESTED');
-  const isAuthorized = userRole === 'Developer';
+  const isAuthorized = ['Developer', 'Technical Lead', 'TechLead', 'Administrator'].includes(userRole);
   const isReadOnly = !isEditableStatus || !isAuthorized;
 
   return (

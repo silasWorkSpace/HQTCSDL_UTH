@@ -148,9 +148,9 @@ export default function DocumentDetailPage({
   }
 
   const isDraftOrChanges = document.docStatus === 'DRAFT' || document.docStatus === 'CHANGES_REQUESTED';
-  const canEdit = userRole === 'Developer' && isDraftOrChanges;
-  const canSubmit = userRole === 'Developer' && isDraftOrChanges;
-  const canRollback = ['Developer', 'Manager', 'Technical Lead', 'TechLead'].includes(userRole);
+  const canEdit = ['Developer', 'Technical Lead', 'TechLead', 'Administrator'].includes(userRole) && isDraftOrChanges;
+  const canSubmit = ['Developer', 'Technical Lead', 'TechLead', 'Administrator'].includes(userRole) && isDraftOrChanges;
+  const canRollback = ['Developer', 'Manager', 'Technical Lead', 'TechLead', 'Administrator'].includes(userRole);
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * bỏ qua phía DriftService (FR-DR-13).
  */
 @Component
-@ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "livingdocs.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class AiResultsConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(AiResultsConsumer.class);

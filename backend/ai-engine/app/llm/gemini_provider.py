@@ -84,29 +84,51 @@ class GeminiProvider(LlmProvider):
             "options": options or {},
         }
         schema = _gemini_response_schema()
-        url = ("https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{quote(self.model_name, safe='')}:generateContent")
         body = {
             "contents": [{"role": "user", "parts": [{"text": json.dumps(prompt, ensure_ascii=False)}]}],
             "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": schema},
         }
-        request = Request(url, data=json.dumps(body).encode("utf-8"),
-                          headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
-                          method="POST")
-        try:
-            with urlopen(request, timeout=45) as response:
-                response_body = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            code, message = _provider_error_details(exc, self.api_key)
-            suffix = f" ({code})" if code else ""
-            raise LlmProviderError(
-                f"Gemini request rejected with HTTP {exc.code}{suffix}: {message}",
-                upstream_status=exc.code,
-                provider_code=code,
-                retryable=exc.code == 429 or exc.code >= 500,
-            ) from None
-        except (URLError, TimeoutError):
-            raise LlmProviderError("Gemini provider is temporarily unreachable") from None
+
+        models_to_try = [self.model_name]
+        for candidate in ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite"]:
+            if candidate not in models_to_try:
+                models_to_try.append(candidate)
+
+        response_body = None
+        last_error = None
+
+        for model in models_to_try:
+            url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{quote(model, safe='')}:generateContent")
+            request = Request(url, data=json.dumps(body).encode("utf-8"),
+                              headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
+                              method="POST")
+            try:
+                with urlopen(request, timeout=45) as response:
+                    response_body = json.loads(response.read().decode("utf-8"))
+                    break
+            except HTTPError as exc:
+                code, message = _provider_error_details(exc, self.api_key)
+                suffix = f" ({code})" if code else ""
+                last_error = LlmProviderError(
+                    f"Gemini request rejected with HTTP {exc.code}{suffix}: {message}",
+                    upstream_status=exc.code,
+                    provider_code=code,
+                    retryable=exc.code == 429 or exc.code >= 500,
+                )
+                if exc.code in (404, 503) and model != models_to_try[-1]:
+                    continue
+                raise last_error from None
+            except (URLError, TimeoutError):
+                last_error = LlmProviderError("Gemini provider is temporarily unreachable")
+                if model != models_to_try[-1]:
+                    continue
+                raise last_error from None
+
+        if response_body is None:
+            if last_error:
+                raise last_error
+            raise LlmProviderError("Gemini provider is temporarily unreachable")
         try:
             text = response_body["candidates"][0]["content"]["parts"][0]["text"]
             draft = DocDraft.model_validate_json(text)

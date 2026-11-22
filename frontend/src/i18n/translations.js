@@ -37,8 +37,15 @@ export const TRANSLATIONS = {
     nav: {
       documents: 'Tài liệu',
       templates: 'Thư viện Template',
+      reviews: 'Hàng đợi duyệt',
       switchLanguage: 'Ngôn ngữ',
       userRole: 'Vai trò',
+    },
+    reviews: {
+      menu: 'Hàng đợi duyệt',
+      title: 'Hàng đợi duyệt',
+      subtitle: 'Các tài liệu đang chờ bạn duyệt. Mỗi vai trò chỉ thấy hàng đợi của mình.',
+      open: 'Mở để duyệt',
     },
     auth: {
       loginTitle: 'Đăng nhập LivingDocs',
@@ -205,8 +212,15 @@ export const TRANSLATIONS = {
     nav: {
       documents: 'Documents',
       templates: 'Template Library',
+      reviews: 'Review Queue',
       switchLanguage: 'Language',
       userRole: 'Role',
+    },
+    reviews: {
+      menu: 'Review Queue',
+      title: 'Review Queue',
+      subtitle: 'Documents waiting for your review. Each role only sees its own queue.',
+      open: 'Open to review',
     },
     auth: {
       loginTitle: 'Sign in to LivingDocs',

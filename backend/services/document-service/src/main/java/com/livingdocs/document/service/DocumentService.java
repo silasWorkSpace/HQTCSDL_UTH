@@ -421,6 +421,16 @@ public class DocumentService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid documentation path", "The repository path must be relative and contain no traversal segments.");
         }
         String schema = TenantContext.getSchema();
+        Integer existingCount = jdbcTemplate.queryForObject(
+            String.format("SELECT COUNT(1) FROM [%s].[document] WHERE repository_id = ? AND path_in_repo = ?", schema),
+            Integer.class,
+            req.getRepositoryId(),
+            safePath
+        );
+        if (existingCount != null && existingCount > 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Document already exists at this path",
+                "A document already exists at " + safePath + " in this repository. Choose a unique path.");
+        }
         StringBuilder selectSql = new StringBuilder(String.format("SELECT id, name, kind, signature, file_path FROM [%s].code_entity "
                 + "WHERE repository_id=? AND commit_hash=? AND removed_at IS NULL", schema));
         List<Object> args = new ArrayList<>();
@@ -538,12 +548,17 @@ public class DocumentService {
         return jdbcTemplate.query("SELECT id, job_type, status, retry_count, in_dlq, next_retry_at, error_message, "
                         + "result_document_id, created_at, updated_at FROM [" + schema + "].ai_job "
                         + "WHERE id=? AND job_type='doc_generation'",
-                (rs, row) -> new AiJobResponse(rs.getObject("id", UUID.class), rs.getString("job_type"),
-                        rs.getString("status"), rs.getInt("retry_count"), rs.getBoolean("in_dlq"),
-                        rs.getTimestamp("next_retry_at") == null ? null : rs.getTimestamp("next_retry_at").toInstant(),
-                        rs.getString("error_message"), rs.getObject("result_document_id", UUID.class),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at") == null ? null : rs.getTimestamp("updated_at").toInstant()),
+                (rs, row) -> {
+                    String status = rs.getString("status");
+                    String errorMsg = rs.getString("error_message");
+                    String errorCode = "failed".equalsIgnoreCase(status) ? "ERR_AI_GENERATION_FAILED" : null;
+                    return new AiJobResponse(rs.getObject("id", UUID.class), rs.getString("job_type"),
+                            status, rs.getInt("retry_count"), rs.getBoolean("in_dlq"),
+                            rs.getTimestamp("next_retry_at") == null ? null : rs.getTimestamp("next_retry_at").toInstant(),
+                            errorCode, errorMsg, rs.getObject("result_document_id", UUID.class),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getTimestamp("updated_at") == null ? null : rs.getTimestamp("updated_at").toInstant());
+                },
                 jobId).stream().findFirst().orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                 "AI job not found", "The generation job does not exist in this workspace."));
     }
@@ -590,35 +605,27 @@ public class DocumentService {
             schema
         );
 
-        UUID createdDocId = jdbcTemplate.execute((java.sql.Connection conn) -> {
-            try (CallableStatement cs = conn.prepareCall(callSql)) {
-                cs.setObject(1, p.getRepositoryId());
-                cs.setString(2, p.getDocType() != null ? p.getDocType() : "README");
-                cs.setString(3, p.getTitle());
-                cs.setString(4, p.getPathInRepo());
-                cs.setObject(5, p.getOwnerId() != null ? p.getOwnerId() : UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                cs.setString(6, p.getMarkdownContent());
-                cs.setString(7, "AI");
-                cs.setNull(8, Types.CHAR); // actor_user_id null for AI
-                cs.setString(9, "AI_GENERATION");
-                cs.setString(10, "DRAFT");
-                cs.setObject(11, p.getTemplateId());
-                cs.setObject(12, p.getCollectionId());
-                cs.setString(13, p.getSourceCommitSha());
-                cs.setNull(14, Types.INTEGER); // source_pr_number
-                cs.setString(15, null);        // source_pr_kind
-                cs.setBoolean(16, true);       // auto_update_enabled
-                cs.registerOutParameter(17, Types.CHAR); // document_id OUTPUT
-                cs.registerOutParameter(18, Types.CHAR); // version_id OUTPUT
-
-                cs.execute();
-
-                String docIdStr = cs.getString(17);
-                return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
+        final UUID createdDocId;
+        try {
+            createdDocId = persistGeneratedDocument(schema, callSql, p);
+        } catch (Exception ex) {
+            log.error("Failed to persist generated document: {}", ex.getMessage(), ex);
+            String errMsg = ex.getMessage();
+            if (errMsg != null && errMsg.contains("uq_document_repo_path")) {
+                errMsg = "Document already exists at path: " + p.getPathInRepo();
+            } else if (errMsg != null && errMsg.length() > 500) {
+                errMsg = errMsg.substring(0, 500);
             }
-        });
+            jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='failed', "
+                    + "error_message=?, updated_at=SYSUTCDATETIME() WHERE id=?", errMsg, jobId);
+            return;
+        }
 
-        if (createdDocId == null) throw new IllegalStateException("Document procedure returned no document ID");
+        if (createdDocId == null) {
+            jdbcTemplate.update("UPDATE [" + schema + "].ai_job SET status='failed', "
+                    + "error_message='Document procedure returned no document ID', updated_at=SYSUTCDATETIME() WHERE id=?", jobId);
+            return;
+        }
 
         if (createdDocId != null) {
             UUID tplVerId = p.getTemplateVersionId();
@@ -733,6 +740,36 @@ public class DocumentService {
         } catch (Exception ignored) {}
         res.setCreatedAt(rs.getTimestamp("created_at").toInstant());
         return res;
+    }
+
+    private UUID persistGeneratedDocument(String schema, String callSql, DocDraftPayload p) {
+        return jdbcTemplate.execute((java.sql.Connection conn) -> {
+            try (CallableStatement cs = conn.prepareCall(callSql)) {
+                cs.setObject(1, p.getRepositoryId());
+                cs.setString(2, p.getDocType() != null ? p.getDocType() : "README");
+                cs.setString(3, p.getTitle());
+                cs.setString(4, p.getPathInRepo());
+                cs.setObject(5, p.getOwnerId() != null ? p.getOwnerId() : UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                cs.setString(6, p.getMarkdownContent());
+                cs.setString(7, "AI");
+                cs.setNull(8, Types.CHAR); // actor_user_id null for AI
+                cs.setString(9, "AI_GENERATION");
+                cs.setString(10, "DRAFT");
+                cs.setObject(11, p.getTemplateId());
+                cs.setObject(12, p.getCollectionId());
+                cs.setString(13, p.getSourceCommitSha());
+                cs.setNull(14, Types.INTEGER); // source_pr_number
+                cs.setString(15, null);        // source_pr_kind
+                cs.setBoolean(16, true);       // auto_update_enabled
+                cs.registerOutParameter(17, Types.CHAR); // document_id OUTPUT
+                cs.registerOutParameter(18, Types.CHAR); // version_id OUTPUT
+
+                cs.execute();
+
+                String docIdStr = cs.getString(17);
+                return docIdStr != null ? UUID.fromString(docIdStr.trim()) : null;
+            }
+        });
     }
 }
 

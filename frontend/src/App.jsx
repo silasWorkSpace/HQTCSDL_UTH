@@ -21,6 +21,7 @@ import VersionDiffPage from './features/documents/pages/VersionDiffPage';
 // Review Feature Pages (WF-01 to WF-22)
 import ReviewQueuePage from './features/reviews/ReviewQueuePage';
 import ReviewPage from './features/reviews/ReviewPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Suggestion & Drift Feature Pages (DR-01 to DR-12, AUTO-01 to AUTO-09)
 import SuggestionQueuePage from './features/suggestions/SuggestionQueuePage';
@@ -29,6 +30,33 @@ import DriftHistoryPage from './features/suggestions/DriftHistoryPage';
 function TopNavigation({ activeRole }) {
   const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
+  const [switching, setSwitching] = React.useState(false);
+
+  const handleRoleChange = async (e) => {
+    const value = e.target.value;
+    if (!value || switching) return;
+    setSwitching(true);
+    try {
+      if (value.startsWith('DEMO_')) {
+        const demoAccounts = {
+          DEMO_ALICE: { email: 'developer1@example.com', roles: ['Developer'] },
+          DEMO_BOB: { email: 'staff1@example.com', roles: ['Staff'] },
+          DEMO_CAROL: { email: 'manager1@example.com', roles: ['Manager'] },
+        };
+        const target = demoAccounts[value];
+        if (target) {
+          await authApi.devLogin('demo', target.email, target.roles);
+        }
+      } else {
+        await authApi.switchRole(value);
+      }
+      window.dispatchEvent(new Event('livingdocs:session-changed'));
+    } catch (err) {
+      alert(err?.detail || err?.message || 'Không thể đổi vai trò');
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -114,7 +142,7 @@ function TopNavigation({ activeRole }) {
                 style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}
               >
                 <CheckSquare size={15} />
-                {t('reviews.menu') || 'Hàng đợi duyệt'}
+                {t('reviews.menu', 'Hàng đợi duyệt')}
               </Link>
             )}
 
@@ -168,21 +196,50 @@ function TopNavigation({ activeRole }) {
             </div>
           </div>
 
-          {/* Role Switcher Pill */}
+          {/* Role Switcher Dropdown */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '4px 10px',
-              backgroundColor: '#f1f5f9',
+              padding: '3px 8px',
+              backgroundColor: switching ? '#fef3c7' : '#f1f5f9',
               borderRadius: '6px',
               fontSize: '12px',
+              border: '1px solid #cbd5e1',
             }}
           >
-            <UserCheck size={14} style={{ color: '#2563eb' }} />
-            <span style={{ color: '#64748b' }}>{t('nav.userRole')}:</span>
-            <strong style={{ color: '#0f172a' }}>{activeRole || 'Chưa đăng nhập'}</strong>
+            <Shield size={14} style={{ color: '#2563eb' }} />
+            <span style={{ color: '#64748b', fontWeight: 500 }}>{t('nav.userRole') || 'Vai trò'}:</span>
+            <select
+              value={activeRole || ''}
+              disabled={switching}
+              onChange={handleRoleChange}
+              style={{
+                border: 'none',
+                backgroundColor: 'transparent',
+                fontWeight: 600,
+                color: '#0f172a',
+                cursor: 'pointer',
+                outline: 'none',
+                fontSize: '12px',
+                padding: '2px 0',
+              }}
+            >
+              <optgroup label="Đổi vai trò tài khoản hiện tại">
+                <option value="Developer">Developer (Lập trình viên)</option>
+                <option value="Technical Lead">Technical Lead (Trưởng nhóm)</option>
+                <option value="Staff">Staff (Rà soát cấp 1)</option>
+                <option value="Manager">Manager (Phê duyệt cấp 2)</option>
+                <option value="Administrator">Administrator (Quản trị viên)</option>
+              </optgroup>
+              <optgroup label="Chuyển nhanh tài khoản mẫu">
+                <option value="DEMO_ALICE">👤 Alice (Developer)</option>
+                <option value="DEMO_BOB">👤 Bob (Staff)</option>
+                <option value="DEMO_CAROL">👤 Carol (Manager)</option>
+              </optgroup>
+            </select>
+            {switching && <span style={{ fontSize: '11px', color: '#b45309' }}>...</span>}
           </div>
 
           {/* Login Button (FR-AUTH-02) */}
@@ -214,6 +271,21 @@ function TopNavigation({ activeRole }) {
 }
 
 // Route Wrapper Components
+function DocumentListWrapper({ userRole }) {
+  const navigate = useNavigate();
+  return (
+    <DocumentListPage
+      userRole={userRole}
+      onNavigate={(screen, params) => {
+        if (screen === 'document-detail') navigate(`/documents/${params.id}`);
+        if (screen === 'document-edit') navigate(`/documents/${params.id}/edit`);
+        if (screen === 'document-diff') navigate(`/documents/${params.documentId}/diff?from=${params.from}&to=${params.to}`);
+        if (screen === 'document-list') navigate('/documents');
+      }}
+    />
+  );
+}
+
 function DocumentDetailWrapper({ userRole }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -312,7 +384,7 @@ function AppContent() {
 
           {/* Documents module */}
               <Route path="/" element={<Navigate to="/documents" replace />} />
-              <Route path="/documents" element={<DocumentListPage userRole={userRole} />} />
+              <Route path="/documents" element={<DocumentListWrapper userRole={userRole} />} />
               <Route path="/documents/:id" element={<DocumentDetailWrapper userRole={userRole} />} />
               <Route
                 path="/documents/:id/edit"
@@ -327,8 +399,22 @@ function AppContent() {
               <Route path="/templates/*" element={<Navigate to="/documents" replace />} />
 
               {/* Review Workflow module (WF-01 to WF-22) */}
-              <Route path="/reviews" element={<ReviewQueuePage />} />
-              <Route path="/reviews/:taskId" element={<ReviewPage />} />
+              <Route
+                path="/reviews"
+                element={
+                  <ErrorBoundary>
+                    <ReviewQueuePage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/reviews/:taskId"
+                element={
+                  <ErrorBoundary>
+                    <ReviewPage />
+                  </ErrorBoundary>
+                }
+              />
 
               {/* Suggestion & Drift module (AUTO-01 to AUTO-09, DR-01 to DR-12) */}
               <Route path="/suggestions" element={<SuggestionQueuePage />} />

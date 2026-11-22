@@ -1,4 +1,4 @@
-import apiClient from '../../services/api/apiClient';
+import apiClient from '../../services/api/apiClient.js';
 
 /**
  * API Client dành riêng cho Authentication & GitHub OAuth (FR-AUTH-02)
@@ -30,6 +30,22 @@ export const authApi = {
       tenant,
       email,
       password,
+    });
+    return res.data;
+  },
+
+  // Đổi vai trò tài khoản hiện tại (Demo & Test)
+  switchRole: async (role) => {
+    const res = await apiClient.post('/api/v1/users/me/switch-role', { role });
+    return res.data;
+  },
+
+  // Đăng nhập nhanh 1-click tài khoản mẫu (Demo dev-token)
+  devLogin: async (tenant, email, roles) => {
+    const res = await apiClient.post('/api/v1/auth/dev-token', {
+      tenant: tenant || 'demo',
+      email,
+      roles: Array.isArray(roles) ? roles : [roles],
     });
     return res.data;
   },

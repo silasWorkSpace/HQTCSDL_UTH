@@ -17,7 +17,7 @@ function ReviewQueueTable({ level }) {
       <Result
         status="error"
         title={t('reviews.error.title')}
-        subTitle={query.error?.response?.data?.detail}
+        subTitle={query.error?.detail || query.error?.message || query.error?.response?.data?.detail}
         extra={<Button type="primary" onClick={() => query.refetch()}>{t('workflow.retry')}</Button>}
       />
     )
@@ -47,7 +47,7 @@ function ReviewQueueTable({ level }) {
     <Table
       rowKey="id"
       columns={columns}
-      dataSource={query.data}
+      dataSource={query.data || []}
       scroll={{ x: 'max-content' }}
       pagination={{ pageSize: 10, hideOnSinglePage: true }}
       locale={{ emptyText: <Empty description={<><strong>{t('reviews.empty.title')}</strong><br />{t('reviews.empty.description')}</>} /> }}
@@ -62,22 +62,28 @@ export default function ReviewQueuePage() {
   const levels = queueLevelsFor(user.roles)
 
   if (levels.length === 0) {
-    return <Result status="403" title={t('reviews.noAccess.title')} subTitle={t('reviews.noAccess.description')} />
+    return (
+      <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+        <Result status="403" title={t('reviews.noAccess.title')} subTitle={t('reviews.noAccess.description')} />
+      </div>
+    )
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('reviews.title')}</Typography.Title>
-        <Typography.Text type="secondary">{t('reviews.subtitle')}</Typography.Text>
-      </div>
-      <Tabs
-        items={levels.map((level) => ({
-          key: level,
-          label: t(`reviews.tabs.${level}`),
-          children: <ReviewQueueTable level={level} />,
-        }))}
-      />
-    </Space>
+    <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <div>
+          <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('reviews.title')}</Typography.Title>
+          <Typography.Text type="secondary">{t('reviews.subtitle')}</Typography.Text>
+        </div>
+        <Tabs
+          items={levels.map((level) => ({
+            key: level,
+            label: t(`reviews.tabs.${level}`),
+            children: <ReviewQueueTable level={level} />,
+          }))}
+        />
+      </Space>
+    </div>
   )
 }

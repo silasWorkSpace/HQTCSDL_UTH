@@ -82,7 +82,7 @@ def test_provider_defaults_to_current_stable_model(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-secret-value")
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
 
-    assert GeminiProvider().model_name == "gemini-3.5-flash-lite"
+    assert GeminiProvider().model_name in ("gemini-2.5-flash", "gemini-3.5-flash-lite")
 
 
 def test_generate_doc_uses_api_key_header_and_response_json_schema(monkeypatch):

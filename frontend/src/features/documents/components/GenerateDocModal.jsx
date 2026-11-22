@@ -26,6 +26,8 @@ export default function GenerateDocModal({ isOpen, onClose, onGenerated }) {
   useEffect(() => {
     if (!isOpen) return;
     setError('');
+    const randomSuffix = Math.random().toString(36).substring(2, 7);
+    setPathInRepo(`docs/guide-${randomSuffix}.md`);
     documentsApi.getRepositories().then((items) => {
       setRepos(items);
       setRepositoryId((current) => current || items[0]?.id || '');

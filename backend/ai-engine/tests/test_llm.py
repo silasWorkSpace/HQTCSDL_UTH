@@ -93,12 +93,13 @@ def test_mock_provider_deterministic_output():
     assert result1.overall_confidence == result2.overall_confidence
 
 def test_factory_default_provider():
-    provider = get_llm_provider()
+    provider = get_llm_provider("mock")
     assert isinstance(provider, MockProvider)
     with pytest.raises(ValueError):
         get_llm_provider("unsupported_provider")
 
-def test_top_level_generate_doc_contract():
+def test_top_level_generate_doc_contract(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
     from app.llm import generate_doc
     entities = [{"name": "OrderService", "kind": "class", "file_path": "src/services/OrderService.java"}]
     template = {"name": "README", "doc_type": "README"}

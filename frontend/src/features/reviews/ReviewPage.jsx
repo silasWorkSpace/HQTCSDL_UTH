@@ -15,9 +15,10 @@ import { useReviewDetail } from './hooks'
 import { personLabel } from './model'
 import useCurrentUser from './useCurrentUser'
 
-function CommentList({ comments }) {
+function CommentList({ comments = [] }) {
   const { t, i18n } = useTranslation()
-  if (comments.length === 0) {
+  const list = Array.isArray(comments) ? comments : []
+  if (list.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('reviews.page.commentsEmpty')} />
   }
   return (
@@ -26,7 +27,7 @@ function CommentList({ comments }) {
       pagination={false}
       scroll={{ x: 'max-content' }}
       rowKey={(row) => `${row.userId}-${row.createdAt}-${row.content}`}
-      dataSource={comments}
+      dataSource={list}
       columns={[
         { title: t('reviews.audit.who'), key: 'who', render: (_, row) => personLabel(row.userName, row.userId) },
         { title: t('reviews.page.commentsTitle'), key: 'content', render: (_, row) => (row.lineNumber ? `[${t('reviews.page.line', { line: row.lineNumber })}] ${row.content}` : row.content) },
@@ -44,22 +45,47 @@ export default function ReviewPage() {
   const query = useReviewDetail(taskId)
   const alerts = useDriftAlerts(query.data?.task?.documentId)
 
-  if (query.isPending) return <Skeleton active paragraph={{ rows: 10 }} />
-  if (query.isError) {
+  if (query.isPending) {
     return (
-      <Result
-        status="error"
-        title={t('reviews.page.error.title')}
-        subTitle={query.error?.response?.data?.detail}
-        extra={<Button type="primary" onClick={() => query.refetch()}>{t('workflow.retry')}</Button>}
-      />
+      <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+        <Skeleton active paragraph={{ rows: 10 }} />
+      </div>
     )
   }
 
-  const { task, document, version, changeLog, lastApproved, decisions, comments } = query.data
-  const title = task.documentTitle || document?.title || task.documentId
-  const canSeeAudit = user.roles.includes('Manager') || user.roles.includes('Administrator')
-  const level = String(task.level).toLowerCase()
+  if (query.isError || !query.data || !query.data.task) {
+    return (
+      <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+        <Result
+          status="error"
+          title={t('reviews.page.error.title') || 'Không thể tải chi tiết duyệt'}
+          subTitle={query.error?.detail || query.error?.message || query.error?.response?.data?.detail || 'Không tìm thấy thông tin task duyệt.'}
+          extra={
+            <Space>
+              <Button type="primary" onClick={() => query.refetch()}>{t('workflow.retry') || 'Thử lại'}</Button>
+              <Link to="/reviews">
+                <Button>{t('reviews.page.back') || 'Về hàng đợi'}</Button>
+              </Link>
+            </Space>
+          }
+        />
+      </div>
+    )
+  }
+
+  const {
+    task = {},
+    document = null,
+    version = null,
+    changeLog = [],
+    lastApproved = null,
+    decisions = [],
+    comments = [],
+  } = query.data
+
+  const title = task?.documentTitle || document?.title || task?.documentId || 'Tài liệu duyệt'
+  const canSeeAudit = (user?.roles || []).includes('Manager') || (user?.roles || []).includes('Administrator')
+  const level = String(task?.level || '').toLowerCase()
 
   const tabs = [
     {
@@ -73,7 +99,7 @@ export default function ReviewPage() {
       children: lastApproved ? (
         <Space direction="vertical" style={{ width: '100%' }}>
           <Typography.Text type="secondary">{t('reviews.page.diffNote')}</Typography.Text>
-          <DiffViewer oldText={lastApproved.content ?? ''} newText={version?.content ?? ''} />
+          <DiffViewer oldText={lastApproved?.content ?? ''} newText={version?.content ?? ''} />
         </Space>
       ) : (
         <Alert type="info" showIcon message={t('reviews.page.noApproved')} />
@@ -83,11 +109,11 @@ export default function ReviewPage() {
       key: 'changeLog',
       label: t('reviews.page.tabs.changeLog'),
       children:
-        changeLog.length === 0 ? (
+        (changeLog || []).length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('reviews.page.changeLogEmpty')} />
         ) : (
           <Timeline
-            items={changeLog.map((v) => ({
+            items={(changeLog || []).map((v) => ({
               key: v.id,
               children: (
                 <div>
@@ -104,13 +130,13 @@ export default function ReviewPage() {
     {
       key: 'evidence',
       label: t('reviews.page.tabs.evidence'),
-      children: alerts.isLoading ? (
+      children: (alerts.isLoading || alerts.isPending) ? (
         <Skeleton active paragraph={{ rows: 3 }} />
       ) : (alerts.data ?? []).length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('reviews.page.evidenceEmpty')} />
       ) : (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          {alerts.data.map((alert) => (
+          {(alerts.data || []).map((alert) => (
             <Card key={alert.id} size="small" title={
               <Space wrap>
                 <Tag>{t(`suggestions.history.types.${slug(alert.driftType)}`, { defaultValue: alert.driftType })}</Tag>
@@ -125,44 +151,46 @@ export default function ReviewPage() {
     },
   ]
   if (canSeeAudit) {
-    tabs.push({ key: 'audit', label: t('reviews.page.tabs.audit'), children: <AuditTrail decisions={decisions} /> })
+    tabs.push({ key: 'audit', label: t('reviews.page.tabs.audit'), children: <AuditTrail decisions={decisions || []} /> })
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Link to="/reviews" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <ArrowLeft size={16} aria-hidden="true" />
-        {t('reviews.page.back')}
-      </Link>
+    <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Link to="/reviews" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          {t('reviews.page.back')}
+        </Link>
 
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 8 }}>{title}</Typography.Title>
-        <Space wrap>
-          <Tag color="blue">{t(`reviews.page.level.${level}`, { defaultValue: task.level })}</Tag>
-          <Tag>{t(`reviews.page.taskStatus.${slug(task.status)}`, { defaultValue: task.status })}</Tag>
-          <Typography.Text type="secondary">
-            {t('reviews.page.submittedBy', { name: personLabel(task.submitterName, task.submitterId) })}
-          </Typography.Text>
-          {task.docStatus && (
-            <Space size={4}>
-              <Typography.Text type="secondary">{t('reviews.decision.result')}:</Typography.Text>
-              <DocStatusBadges docStatus={task.docStatus} />
-            </Space>
-          )}
-        </Space>
-      </div>
+        <div>
+          <Typography.Title level={3} style={{ marginBottom: 8 }}>{title}</Typography.Title>
+          <Space wrap>
+            <Tag color="blue">{t(`reviews.page.level.${level}`, { defaultValue: task.level })}</Tag>
+            <Tag>{t(`reviews.page.taskStatus.${slug(task.status)}`, { defaultValue: task.status })}</Tag>
+            <Typography.Text type="secondary">
+              {t('reviews.page.submittedBy', { name: personLabel(task.submitterName, task.submitterId) })}
+            </Typography.Text>
+            {task.docStatus && (
+              <Space size={4}>
+                <Typography.Text type="secondary">{t('reviews.decision.result')}:</Typography.Text>
+                <DocStatusBadges docStatus={task.docStatus} />
+              </Space>
+            )}
+          </Space>
+        </div>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 480px', minWidth: 0 }}>
-          <Tabs items={tabs} />
-          <Card size="small" title={t('reviews.page.commentsTitle')} style={{ marginTop: 16 }}>
-            <CommentList comments={comments} />
-          </Card>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 480px', minWidth: 0 }}>
+            <Tabs items={tabs} />
+            <Card size="small" title={t('reviews.page.commentsTitle')} style={{ marginTop: 16 }}>
+              <CommentList comments={comments || []} />
+            </Card>
+          </div>
+          <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
+            <DecisionPanel task={task} user={user} />
+          </div>
         </div>
-        <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
-          <DecisionPanel task={task} user={user} />
-        </div>
-      </div>
-    </Space>
+      </Space>
+    </div>
   )
 }

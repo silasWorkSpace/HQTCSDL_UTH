@@ -823,7 +823,8 @@ Empty.PRESENTED_IMAGE_SIMPLE = true;
    Result
 ------------------------------------------------------------- */
 export function Result({ status = 'info', title, subTitle, extra }) {
-  const isError = status === 'error';
+  const isError = status === 'error' || status === '403' || status === '404' || status === '500';
+  const isWarning = status === 'warning';
   return (
     <div
       style={{
@@ -837,6 +838,8 @@ export function Result({ status = 'info', title, subTitle, extra }) {
     >
       {isError ? (
         <AlertCircle size={48} color="#dc2626" style={{ marginBottom: '16px' }} />
+      ) : isWarning ? (
+        <AlertTriangle size={48} color="#f59e0b" style={{ marginBottom: '16px' }} />
       ) : (
         <CheckCircle size={48} color="#16a34a" style={{ marginBottom: '16px' }} />
       )}

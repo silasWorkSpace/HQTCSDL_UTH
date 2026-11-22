@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 
 /** Completes publication only from GitHub's verified pull_request.closed webhook. */
 @Component
-@ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "livingdocs.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class DocumentationPullRequestConsumer {
     private static final Logger log = LoggerFactory.getLogger(DocumentationPullRequestConsumer.class);
     private static final Pattern DOCUMENT_MARKER = Pattern.compile("(?m)^LivingDocs-Document-ID:\\s*([0-9a-fA-F-]{36})\\s*$");
