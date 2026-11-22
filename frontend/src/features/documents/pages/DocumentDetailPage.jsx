@@ -186,6 +186,17 @@ export default function DocumentDetailPage({
             </button>
           )}
 
+          {/* Drift History Button */}
+          <button
+            type="button"
+            onClick={() => onNavigate && onNavigate('drift-history', { documentId: document.id })}
+            className="ld-btn ld-btn-ghost"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <ShieldAlert size={14} />
+            Lịch sử drift
+          </button>
+
           {/* Edit Draft Button */}
           {canEdit && (
             <button

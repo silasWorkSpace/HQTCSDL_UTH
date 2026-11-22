@@ -146,7 +146,7 @@ function TopNavigation({ activeRole }) {
               </Link>
             )}
 
-            {(activeRole === 'Developer' || activeRole === 'Administrator') && (
+            {Boolean(activeRole) && (
               <>
                 <Link to="/suggestions" className="ld-btn ld-btn-ghost" style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}>Gợi ý drift</Link>
                 <Link to="/drift-history" className="ld-btn ld-btn-ghost" style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600 }}>Lịch sử drift</Link>
@@ -297,6 +297,7 @@ function DocumentDetailWrapper({ userRole }) {
         if (screen === 'document-list') navigate('/documents');
         if (screen === 'document-edit') navigate(`/documents/${params.id}/edit`);
         if (screen === 'document-diff') navigate(`/documents/${params.documentId}/diff?from=${params.from}&to=${params.to}`);
+        if (screen === 'drift-history') navigate(`/drift-history?documentId=${params.documentId}`);
       }}
     />
   );
@@ -417,9 +418,30 @@ function AppContent() {
               />
 
               {/* Suggestion & Drift module (AUTO-01 to AUTO-09, DR-01 to DR-12) */}
-              <Route path="/suggestions" element={<SuggestionQueuePage />} />
-              <Route path="/drift-history" element={<DriftHistoryPage />} />
-              <Route path="/documents/:id/drift" element={<DriftHistoryPage />} />
+              <Route
+                path="/suggestions"
+                element={
+                  <ErrorBoundary>
+                    <SuggestionQueuePage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/drift-history"
+                element={
+                  <ErrorBoundary>
+                    <DriftHistoryPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/documents/:id/drift"
+                element={
+                  <ErrorBoundary>
+                    <DriftHistoryPage />
+                  </ErrorBoundary>
+                }
+              />
 
               <Route path="*" element={<AccessDenied />} />
             </Routes>
