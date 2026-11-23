@@ -1,0 +1,41 @@
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	@identity path /api/v1/auth* /api/v1/users*
+	handle @identity {
+		reverse_proxy identity-service:8081
+	}
+
+	@integration path /api/v1/integrations* /api/v1/analysis-runs* /api/v1/repositories* /api/v1/webhooks*
+	handle @integration {
+		reverse_proxy integration-service:8082
+	}
+
+	@workflow path /api/v1/reviews* /api/v1/suggestions* /api/v1/drift-alerts*
+	@workflowDocument path_regexp workflowDocument ^/api/v1/documents/[^/]+/(submit|drift-alerts)(/.*)?$
+	handle @workflow {
+		reverse_proxy workflow-service:8084
+	}
+	handle @workflowDocument {
+		reverse_proxy workflow-service:8084
+	}
+
+	@gov path /api/v1/governance*
+	handle @gov {
+		reverse_proxy governance-service:8085
+	}
+
+	@notifications path /api/v1/notifications*
+	handle @notifications {
+		reverse_proxy notification-service:8086
+	}
+
+	@documents path /api/v1/documents*
+	handle @documents {
+		reverse_proxy document-service:8083
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

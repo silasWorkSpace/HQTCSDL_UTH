@@ -1,0 +1,23 @@
+/* LivingDocs Global Styles */
+@import './livingdocs.css';
+
+:root {
+  --ld-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --ld-bg-main: #f8fafc;
+  --ld-text-main: #1e293b;
+  --ld-primary: #2563eb;
+  --ld-primary-hover: #1d4ed8;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--ld-font-family);
+  background-color: var(--ld-bg-main);
+  color: var(--ld-text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}

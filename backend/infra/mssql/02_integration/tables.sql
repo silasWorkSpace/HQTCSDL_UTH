@@ -106,6 +106,39 @@ BEGIN
 END;
 GO
 
+-- Track initial repository indexing and source change analysis as pollable runs.
+IF OBJECT_ID(N'[$(SchemaName)].analysis_run', N'U') IS NULL
+BEGIN
+    CREATE TABLE [$(SchemaName)].analysis_run
+    (
+        id                  UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_analysis_run_id DEFAULT NEWSEQUENTIALID(),
+        repository_id       UNIQUEIDENTIFIER NOT NULL,
+        source_event_id     UNIQUEIDENTIFIER NULL,
+        correlation_id      UNIQUEIDENTIFIER NOT NULL,
+        trigger_type        VARCHAR(30) NOT NULL,
+        base_commit_sha     VARCHAR(64) NULL,
+        head_commit_sha     VARCHAR(64) NOT NULL,
+        status              VARCHAR(20) NOT NULL CONSTRAINT df_analysis_run_status DEFAULT 'queued',
+        files_indexed       INT NOT NULL CONSTRAINT df_analysis_run_files DEFAULT 0,
+        entities_indexed    INT NOT NULL CONSTRAINT df_analysis_run_entities DEFAULT 0,
+        error_message       NVARCHAR(2000) NULL,
+        created_at          DATETIME2(3) NOT NULL CONSTRAINT df_analysis_run_created DEFAULT SYSUTCDATETIME(),
+        started_at          DATETIME2(3) NULL,
+        completed_at        DATETIME2(3) NULL,
+        CONSTRAINT pk_analysis_run PRIMARY KEY (id),
+        CONSTRAINT fk_analysis_run_repository FOREIGN KEY (repository_id)
+            REFERENCES [$(SchemaName)].repository(id) ON DELETE CASCADE,
+        CONSTRAINT fk_analysis_run_source_event FOREIGN KEY (source_event_id)
+            REFERENCES [$(SchemaName)].source_event(id) ON DELETE NO ACTION,
+        CONSTRAINT ck_analysis_run_status CHECK (status IN ('queued','running','completed','failed')),
+        CONSTRAINT ck_analysis_run_trigger CHECK (trigger_type IN ('repository_connected','pull_request','push')),
+        CONSTRAINT ck_analysis_run_files CHECK (files_indexed >= 0 AND entities_indexed >= 0)
+    );
+    CREATE INDEX ix_analysis_run_repository_created
+        ON [$(SchemaName)].analysis_run(repository_id, created_at DESC);
+END;
+GO
+
 -- 4. BẢNG: code_entity
 -- Mô tả: Lưu trữ các thực thể mã nguồn bóc tách từ AST (Class, Method, Endpoint, Parameter)
 -- Phục vụ liên kết tài liệu và phát hiện Drift
@@ -157,6 +190,8 @@ BEGIN
         token_used          INT                 NOT NULL CONSTRAINT df_ai_job_token_used DEFAULT 0,
         source_event_id     UNIQUEIDENTIFIER    NULL,
         correlation_id      UNIQUEIDENTIFIER    NOT NULL,
+        request_payload     NVARCHAR(MAX)       NULL,
+        result_document_id  UNIQUEIDENTIFIER    NULL,
         error_message       NVARCHAR(MAX)       NULL,
 
         -- Audit columns
@@ -175,6 +210,12 @@ BEGIN
         CONSTRAINT ck_ai_job_job_type CHECK (job_type IN ('ast_parsing', 'drift_detection', 'doc_generation', 'doc_update', 'embedding_indexing'))
     );
 END;
+GO
+
+IF COL_LENGTH('[$(SchemaName)].ai_job', 'request_payload') IS NULL
+    ALTER TABLE [$(SchemaName)].ai_job ADD request_payload NVARCHAR(MAX) NULL;
+IF COL_LENGTH('[$(SchemaName)].ai_job', 'result_document_id') IS NULL
+    ALTER TABLE [$(SchemaName)].ai_job ADD result_document_id UNIQUEIDENTIFIER NULL;
 GO
 
 -- 6. BẢNG: embedding

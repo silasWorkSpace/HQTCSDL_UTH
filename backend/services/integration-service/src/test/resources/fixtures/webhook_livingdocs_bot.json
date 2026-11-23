@@ -1,0 +1,30 @@
+{
+  "action": "opened",
+  "number": 102,
+  "pull_request": {
+    "id": 987654322,
+    "number": 102,
+    "state": "open",
+    "title": "[LivingDocs] Tự động cập nhật tài liệu kỹ thuật",
+    "user": {
+      "login": "livingdocs[bot]",
+      "id": 998877
+    },
+    "head": {
+      "ref": "docs/auto-update-102",
+      "sha": "ffffffffffffffffffffffffffffffffffffffff"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "merged": false
+  },
+  "repository": {
+    "id": 12345678,
+    "name": "demo-repo",
+    "full_name": "tester_hieu/demo-repo"
+  },
+  "sender": {
+    "login": "livingdocs[bot]"
+  }
+}
